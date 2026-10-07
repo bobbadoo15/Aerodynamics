@@ -1,0 +1,29 @@
+Pressure:
+    * Pressure difference is zero at the wingtips (upper/lower pressures converge)
+    * There is no lift at the wingtips due to zero pressure difference
+    * Near the wingtips, high pressure below the wing "spills" outward toward the tips
+    * The spilled pressure moves around the wingtips and inward along the wingspan
+Vortex Sheets:
+    * An airfoil is created using vortex sheets where vortex strength varies along the 
+        sheet
+    * Vortex strengths do not vary along the wingspan at that point
+    * Because high-pressure moves outward below the airfoil and low-pressure moves
+        inward, the spanwise velocities are different; this creates a trailing vortex 
+        sheet at the trailing edge
+    * The trailing vortex sheet is not bound to any surface and moves freely; this
+        sheet changes shapes downstream by the induced flow field
+    * Cannot synthesize sheets perpendicular to the airfoil, the sheets can be
+        synthesized in the form of a horseshoe-shaped filaments
+Vortex Strength:
+    * Vortex strength stays constant along the entire filament; the bound circulation
+        distribution (circulation strengths for each filament at the TE) decreases along 
+        the span
+Wingspan:
+    * Aerodynamic forces are constant if the chord length is constant throughout the 
+        wingspan
+Wingtip Vortices:
+    * When the sheet completely rolls up from the lower aft surface of the airfoil at
+        the wingtip
+    * Potential flow predicts the vortices trail the wingtips while keeping the vortex
+        strengths constant; viscous forces prevent this happening in reality
+    * 
