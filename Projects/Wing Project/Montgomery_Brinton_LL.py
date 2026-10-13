@@ -70,7 +70,6 @@ def cov(total_nodes,pi):
     theta = np.linspace(0,pi,total_nodes)
     # Find the related z/b values
     zpb = -0.5 * np.cos(theta)
-
     return theta, zpb
 
 # ==========================================================================================
@@ -106,7 +105,7 @@ def load_input_data():
 #                                    AIRFOIL FUNCTIONS
 # ==========================================================================================
 
-def elliptic(a,alo,B,CLa_tilde,c,cinv,RA,theta,zpb,pi):
+def elliptic(a,alo,B,CLa_tilde,c,cinv,N,RA,theta,zpb,pi):
     """ This generates the desired LL for an elliptic wing. """
     # Find the chord distribution
     cpb = (4/(pi*RA)) * np.sqrt(1-(2*zpb)**2)
@@ -132,7 +131,7 @@ def geometry(a,alo,B,CLa_tilde,c,cinv,planform,N,RA,RT,theta,zpb,pi):
     """ This is the main function to develope the shape of the wing. """
     match planform:
         case "elliptic":
-            an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD = elliptic(a,alo,B,CLa_tilde,c,cinv,RA,theta,zpb,pi)
+            an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD = elliptic(a,alo,B,CLa_tilde,c,cinv,N,RA,theta,zpb,pi)
         case "tapered":
             an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD = tapered(a,alo,B,CLa_tilde,c,cinv,N,RA,RT,theta,zpb,pi)
         case _:
