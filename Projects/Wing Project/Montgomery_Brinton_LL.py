@@ -16,6 +16,7 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
+import sys
 
 # ==========================================================================================
 #                                          MAIN
@@ -24,31 +25,21 @@ from pathlib import Path
 def main(pi):
     """ This contains the structure of the program. """
     # Import JSON content from 'input.json'
-    a, alo, CLa_tilde, nodes, planform, RA, RT = load_input_data()
+    a, alo, CLa_tilde, nodes, planform, RA, RT, view_planform, view_planform, view_washout_dist, \
+    washout_amount, washout_type, CL_design = load_input_data()
     # Create the number of nodes along the semispan
     total_nodes = node(nodes)
     # Preallocate arrays
-    B, c, cinv = preallocate(total_nodes)
+    B, c, cinv, omega_mat = preallocate(total_nodes)
     # Calculate for the theta values
     theta, zpb = cov(total_nodes,pi)
     # Define the shape of the wing
-    an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD = geometry(a,alo,B,CLa_tilde,c,cinv,planform,total_nodes,RA,RT,theta,zpb,pi)
+    an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD = geometry(a,alo,B,CLa_tilde,c,cinv,planform,
+                                                          total_nodes,omega_mat,RA,RT,theta,zpb,pi)
     # Print, output results
     # results(an,c,cinv,cpb,CDi,CL,CLa,es,kD,kL,theta,zpb)
     # Plot the planform
-    PlotPlanform(cpb,planform,zpb)
-
-    # Debugging
-    # np.set_printoptions(suppress=True, linewidth=200, 
-    #                     formatter={'float_kind': '{:18.12f}'.format})
-    # print(c)
-    # print()
-    # print(cinv)
-    # print()
-    # print(f"CL = {CL}")
-    # print(f"CLa = {CLa}")
-    # print(f"CDi = {CDi}")
-    # print(f"kL = {kL}")
+    PlotPlanform(cpb,planform,view_planform,zpb)
 
 # ==========================================================================================
 #                                       NODAL COUNT
@@ -80,7 +71,7 @@ def load_input_data():
     """ This imports all content from the 'input.json' file. """
     # Define the input path
     script_dir = Path(__file__).parent
-    input_path = script_dir/"W1_input.json"
+    input_path = script_dir/"W2_input.json"
     # Open and load JSON file
     with open(input_path, 'r') as file:
         data = json.load(file)
@@ -99,13 +90,23 @@ def load_input_data():
     RA = data["wing"]["planform"]["aspect_ratio"]
     # Find the tapered ratio
     RT = data["wing"]["planform"]["taper_ratio"]
-    return a, alo, CLa_tilde, nodes, planform, RA, RT
+    # Load viewing options
+    view_planform = data["view"]["planform"]
+    view_washout_dist = data["view"]["washout_distribution"]
+    # Load washout amount in radians
+    washout_amount = data["wing"]["washout"]["amount[deg]"] * pi/180
+    # Load washout distribution type
+    washout_type = data["wing"]["washout"]["distribution"]
+    # Load the lift coefficient from design
+    CL_design = data["wing"]["washout"]["CL_design"]
+    return a, alo, CLa_tilde, nodes, planform, RA, RT, view_planform, view_washout_dist, \
+           washout_amount, washout_type, CL_design
 
 # ==========================================================================================
 #                                    AIRFOIL FUNCTIONS
 # ==========================================================================================
 
-def elliptic(a,alo,B,CLa_tilde,c,cinv,N,RA,theta,zpb,pi):
+def elliptic(a,alo,B,CLa_tilde,c,cinv,N,omega_mat,RA,theta,zpb,pi):
     """ This generates the desired LL for an elliptic wing. """
     # Find the chord distribution
     cpb = (4/(pi*RA)) * np.sqrt(1-(2*zpb)**2)
@@ -114,7 +115,7 @@ def elliptic(a,alo,B,CLa_tilde,c,cinv,N,RA,theta,zpb,pi):
     # Build the inverse c-matrix
     cinv = cmatrix_inverse(c,cinv)
     # Find Fourier values
-    an = fourier(B,c)
+    an = fourier(B,c,omega_mat)
     # Define induced drag and lift factors
     kL = 0
     kD = 0
@@ -127,19 +128,21 @@ def elliptic(a,alo,B,CLa_tilde,c,cinv,N,RA,theta,zpb,pi):
     CDi = (CL**2) / (pi*RA)
     return an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD
 
-def geometry(a,alo,B,CLa_tilde,c,cinv,planform,N,RA,RT,theta,zpb,pi):
+def geometry(a,alo,B,CLa_tilde,c,cinv,planform,N,omega_mat,RA,RT,theta,zpb,pi):
     """ This is the main function to develope the shape of the wing. """
     match planform:
         case "elliptic":
-            an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD = elliptic(a,alo,B,CLa_tilde,c,cinv,N,RA,theta,zpb,pi)
+            an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD = elliptic(a,alo,B,CLa_tilde,c,cinv,N,
+                                                                  omega_mat,RA,theta,zpb,pi)
         case "tapered":
-            an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD = tapered(a,alo,B,CLa_tilde,c,cinv,N,RA,RT,theta,zpb,pi)
+            an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD = tapered(a,alo,B,CLa_tilde,c,cinv,N,
+                                                                 omega_mat,RA,RT,theta,zpb,pi)
         case _:
             raise ValueError(f"Unknown wing planform: {planform}")
 
     return an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD
 
-def tapered(a,alo,B,CLa_tilde,c,cinv,N,RA,RT,theta,zpb,pi):
+def tapered(a,alo,B,CLa_tilde,c,cinv,N,omega_mat,RA,RT,theta,zpb,pi):
     """ This generates the desired LL for a tapered wing. """
     # Find the chord distribution
     cpb = (2 / (RA*(1+RT))) * (1 - (1-RT)*np.abs(2*zpb))
@@ -148,7 +151,7 @@ def tapered(a,alo,B,CLa_tilde,c,cinv,N,RA,RT,theta,zpb,pi):
     # Build the inverse c-matrix
     cinv = cmatrix_inverse(c,cinv)
     # Find Fourier values
-    an = fourier(B,c)
+    an = fourier(B,c,omega_mat)
     # Find the first Fourier value
     a1 = an[0]
     # Find the factor values
@@ -177,7 +180,8 @@ def cmatrix(c,cpb,CLa_tilde,N,theta):
             elif i == N-1:
                 c[i,j] = (-1)**(n+1) * n**2 # Last-row elements
             else:
-                c[i,j] = ((4/(CLa_tilde*cpb[i])) + (n/np.sin(theta[i]))) * np.sin(n*theta[i]) # Elements in between
+                c[i,j] = ((4/(CLa_tilde*cpb[i])) + (n/np.sin(theta[i]))) \
+                          * np.sin(n*theta[i]) # Elements in between
     return c
 
 def cmatrix_inverse(c,cinv):
@@ -198,18 +202,20 @@ def factors(an,a1,CLa_tilde,RA):
     es = 1 / (1+kD)
     return kL, kD, es
 
-def fourier(B,c):
+def fourier(B,c,omega_mat):
     """ This is where the fourier series coefficients are found. """
     # Solve the Fourier Series
     an = np.linalg.solve(c,B)
-    return an
+    bn = np.linalg.solve(c,omega_mat)
+    return an, bn
 
 def preallocate(N):
     """ This is where to preallocate matrices. """
     c = np.zeros((N,N))
     cinv = np.zeros((N,N))
     B = np.ones(N)
-    return B, c, cinv
+    omega_mat = np.zeros(N)
+    return B, c, cinv, omega_mat
     
 def results(an,c,cinv,cpb,CDi,CL,CLa,es,kD,kL,theta,zpb):
     """ This is where the final results are found. """
@@ -247,56 +253,78 @@ def results(an,c,cinv,cpb,CDi,CL,CLa,es,kD,kL,theta,zpb):
     np.savetxt(f, an, fmt="%18.12f")
     f.close()
 
+# def washout(washout_type,zpb):
+#     """ This is where washout is calculated. """
+#     match washout_type:
+#         case "none":
+#             omega_dist = np.zeros_like(zpb)
+#         case "linear":
+
+#         case "optimum":
+
+#         case _:
+#             raise ValueError(f"Unknown washout type: {washout_type}")
+#     return omega_dist
+
+
 # ==========================================================================================
 #                                        PLOTTING
 # ==========================================================================================
 
-def PlotPlanform(cpb,planform,zpb):
+def PlotPlanform(cpb,planform,view_planform,zpb):
     """ This displays the desired lifitng-line for a given wingspan. """
-    # Define the LE and TE
-    LE = 0.25 * cpb
-    TE = -0.75 * cpb
-    # Create the font family for the plot
-    plt.rcParams.update({
-        "font.family": "serif",
-        "font.serif": ["Times New Roman"],
-        "mathtext.fontset": "stix",
-        "font.size": 12,
-        "axes.titlesize": 16,
-        "axes.labelsize": 14,
-    })
-    # Create figure
-    fig, ax = plt.subplots()
-    # Create plot information
-    ax.set_title(f"{planform.capitalize()} Planform",
-             fontsize=16,
-             fontfamily="serif",
-             fontweight="bold")
-    ax.set_xlabel(r"$\mathbfit{z/b}$", fontsize=14)
-    ax.set_ylabel(r"$\mathbfit{c/b}$", fontsize=14) 
-    ax.set_aspect("equal")
-    ax.grid(False)
-    # Format plot borders
-    for spine in ax.spines.values():
-        spine.set_linewidth(1.5)
-    # Format ticks
-    ax.tick_params(axis="both",
-                which="major",
-                width=1.5,
-                length=6,
-                direction="out")
-    # Format tick labels
-    for label in ax.get_xticklabels() + ax.get_yticklabels():
-        label.set_fontweight("bold")
-    # Plot vertical chord lines
-    ax.vlines(zpb, TE, LE, color="blue", linewidth=0.75)
-    # Plot the LE and TE
-    ax.plot(zpb, LE, color="black", linewidth=0.75)
-    ax.plot(zpb, TE, color="black", linewidth=0.75)
-    # Plot quarter chord line
-    ax.plot(zpb, np.zeros_like(zpb), color="black", linestyle="--", linewidth=0.75)
+    if view_planform == True:
+        # Define the LE and TE
+        LE = 0.25 * cpb
+        TE = -0.75 * cpb
+        # Create the font family for the plot
+        plt.rcParams.update({
+            "font.family": "serif",
+            "font.serif": ["Times New Roman"],
+            "mathtext.fontset": "stix",
+            "font.size": 12,
+            "axes.titlesize": 16,
+            "axes.labelsize": 14,
+        })
+        # Create figure
+        fig, ax = plt.subplots()
+        # Create plot information
+        ax.set_title(f"{planform.capitalize()} Planform",
+                fontsize=16,
+                fontfamily="serif",
+                fontweight="bold")
+        ax.set_xlabel(r"$\mathbfit{z/b}$", fontsize=14)
+        ax.set_ylabel(r"$\mathbfit{c/b}$", fontsize=14) 
+        ax.set_aspect("equal")
+        ax.grid(False)
+        # Format plot borders
+        for spine in ax.spines.values():
+            spine.set_linewidth(1.5)
+        # Format ticks
+        ax.tick_params(axis="both",
+                    which="major",
+                    width=1.5,
+                    length=6,
+                    direction="out")
+        # Format tick labels
+        for label in ax.get_xticklabels() + ax.get_yticklabels():
+            label.set_fontweight("bold")
+        # Plot vertical chord lines
+        ax.vlines(zpb, TE, LE, color="blue", linewidth=0.75)
+        # Plot the LE and TE
+        ax.plot(zpb, LE, color="black", linewidth=0.75)
+        ax.plot(zpb, TE, color="black", linewidth=0.75)
+        # Plot quarter chord line
+        ax.plot(zpb, np.zeros_like(zpb), color="black", linestyle="--", linewidth=0.75)
 
-    plt.show()
+        plt.show()
+    else:
+        print("Displaying planform view is disabled. Goodbye!")
+        sys.exit()
+
+def PlotWashout():
+    """ This plots the washout distribution. """
+
 
 # ==========================================================================================
 #                                     RUNNING PROGRAM
