@@ -47,7 +47,7 @@ def main():
     # write_csv(a,CL,Cmle,Cmqc)
 
     # Debugging
-    np.set_printoptions(precision=5, suppress=True, linewidth=200, floatmode="fixed")
+    np.set_printoptions(precision=13, suppress=True, linewidth=200, floatmode="fixed")
     # print("\n========== NODES ==========")
     # print(nodes)
     # print("\n========== LENGTHS ==========")
@@ -63,8 +63,8 @@ def main():
     print("\n=========================================")
     print("           AERODYNAMIC RESULTS ")
     print("=========================================")
-    print(f"V     = {V:12.5f}")
-    print(f"CP    = {Cp:12.5f}")
+    # print(f"V     = {V:12.5f}")
+    # print(f"CP    = {Cp:12.5f}")
     print(f"CL    = {CL:12.5f}")
     print(f"Cmle  = {Cmle:12.5f}")
     print(f"Cmqc  = {Cmqc:12.5f}")
@@ -166,7 +166,7 @@ def le_pitching_moment(a,gamma,lengths,nodes,Np,v):
         g2 = gamma[i+1,0]
         # Fine the pitching moment about the LE
         Cmle += lengths[i,0] * ((((2*x1*g1 + x1*g2 + x2*g1 + 2*x2*g2)/v)*np.cos(a)) \
-                                + (((2*y1*g1 + y1*g2 + y2*g1 * 2*y2*g2)/v)*np.sin(a)))
+                                + (((2*y1*g1 + y1*g2 + y2*g1 + 2*y2*g2)/v)*np.sin(a)))
     Cmle = -Cmle/3
     return Cmle
 
