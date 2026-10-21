@@ -8,7 +8,7 @@
             "taper_ratio": 0.5
         },
         "airfoil_lift_slope": 6.283185307179590,
-        "nodes_per_semispan": 4,
+        "nodes_per_semispan": 50,
         "washout": {
             "distribution": "optimum",
             "distribution_options": [["none: no twist"],

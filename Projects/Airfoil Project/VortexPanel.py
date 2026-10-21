@@ -43,29 +43,31 @@ def main():
     Cmle = le_pitching_moment(a,gamma,lengths,nodes,Np,v)
     # Find the quarter-chord pitching moment coefficient
     Cmqc = qc_pitching_moment(a,CL,Cmle)
+    # Write VPM data into a csv file for plotting
+    # write_csv(a,CL,Cmle,Cmqc)
 
     # Debugging
     np.set_printoptions(precision=5, suppress=True, linewidth=200, floatmode="fixed")
-    print("\n========== NODES ==========")
-    print(nodes)
-    print("\n========== LENGTHS ==========")
-    print(lengths)
-    print("\n========== CONTROL POINTS ==========")
-    print(control_points)
-    print("\n========== A-MATRIX ==========")
-    print(A)
-    print("\n========== B-MATRIX ==========")
-    print(B)
-    print("\n========== GAMMA ==========")
-    print(gamma)
-    print("\n========== AERODYNAMIC RESULTS ==========")
-    # print(f"Vx = {vx}")
-    # print(f"Vy = {vy}")
-    print(f"V     = {V:10.5f}")
-    print(f"CP    = {Cp:10.5f}")
-    print(f"CL    = {CL:10.5f}")
-    print(f"Cmle  = {Cmle:10.5f}")
-    print(f"Cmqc  = {Cmqc:10.5f}")
+    # print("\n========== NODES ==========")
+    # print(nodes)
+    # print("\n========== LENGTHS ==========")
+    # print(lengths)
+    # print("\n========== CONTROL POINTS ==========")
+    # print(control_points)
+    # print("\n========== A-MATRIX ==========")
+    # print(A)
+    # print("\n========== B-MATRIX ==========")
+    # print(B)
+    # print("\n========== GAMMA ==========")
+    # print(gamma)
+    print("\n=========================================")
+    print("           AERODYNAMIC RESULTS ")
+    print("=========================================")
+    print(f"V     = {V:12.5f}")
+    print(f"CP    = {Cp:12.5f}")
+    print(f"CL    = {CL:12.5f}")
+    print(f"Cmle  = {Cmle:12.5f}")
+    print(f"Cmqc  = {Cmqc:12.5f}")
     print("=========================================")
     print()
 
@@ -305,6 +307,18 @@ def velocity(a,cp,v,gamma,nodes,lengths,Np):
     # Find the total velocity
     V = np.sqrt(vx**2 + vy**2)
     return V
+
+# def write_csv(a,CL,Cmle,Cmqc):
+#     """ This function writes the output to a csv file for plotting. """
+#     # Define the headers
+#     headers = ["alpha (deg)","CL_tilde","Cmle_tilde","Cmc/4_tilde"]
+#     # Put data into lested list
+#     vpm_data = []
+#     for i in range():
+
+#     # Write to the file - always specify newline="" and encoding=""
+#     with open("vpm_results.csv", "w", newline="", encoding="utf-8") as file:
+
 
 if __name__ == "__main__":
     # Constants

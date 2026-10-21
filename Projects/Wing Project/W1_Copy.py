@@ -297,6 +297,12 @@ def PlotPlanform(cpb,planform,view_planform,zpb):
         # Plot the LE and TE
         ax.plot(zpb, LE, color="black", linewidth=0.75)
         ax.plot(zpb, TE, color="black", linewidth=0.75)
+        # Plot the tapered edges
+        if planform == "tapered":
+            # Plot the left wingtip
+            ax.vlines(zpb[0], TE[0], LE[0], color="black", linewidth=0.75)
+            # Plot the right wingtip
+            ax.vlines(zpb[-1], TE[-1], LE[-1], color="black", linewidth=0.75)
         # Plot quarter chord line
         ax.plot(zpb, np.zeros_like(zpb), color="black", linestyle="--", linewidth=0.75)
 
