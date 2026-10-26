@@ -47,7 +47,7 @@ def main():
     # write_csv(a,CL,Cmle,Cmqc)
 
     # Debugging
-    np.set_printoptions(precision=5, suppress=True, linewidth=200, floatmode="fixed")
+    np.set_printoptions(precision=13, suppress=True, linewidth=200, floatmode="fixed")
     # print("\n========== NODES ==========")
     # print(nodes)
     # print("\n========== LENGTHS ==========")
