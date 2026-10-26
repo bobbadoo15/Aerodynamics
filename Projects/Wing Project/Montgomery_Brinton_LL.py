@@ -57,7 +57,7 @@ def main(pi):
     # Calculate for the theta values
     theta,zpb = cov(total_nodes,pi)
     # Define the Washout of the wing
-    omega_dist = washout(washout_type,zpb)
+    omega_dist = washout(planform,washout_type,zpb)
     # Define the shape of the wing
     an,bn,c,cinv,cpb,CL,CLa,CDi,eps_Omega,\
     es,kL,kD,kDL,kDOmega,omega_dist = geometry(a,alo,B,CLa_tilde,c,cinv,planform,total_nodes,omega_dist,
@@ -326,7 +326,7 @@ def results(an,bn,c,cinv,cpb,CDi,CL,CLa,eps_Omega,es,greek,kD,kDL,kDOmega,kL,ome
     print(f"CDi   ={CDi:18.12f}")
     print("==============================================\n")
 
-def washout(washout_type,zpb):
+def washout(planform,washout_type,zpb):
     """ This is where washout is calculated. """
     match washout_type:
         case "none":
@@ -334,7 +334,7 @@ def washout(washout_type,zpb):
         case "linear":
             omega_dist = washout_linear_distribution(zpb)
         case "optimum":
-            pass
+            omega_dist = washout_optimum_distribution(planform,zpb)
         case _:
             raise ValueError(f"Unknown washout type: {washout_type}")
     return omega_dist
@@ -342,6 +342,16 @@ def washout(washout_type,zpb):
 def washout_linear_distribution(zpb):
     """ This calculates the washout distribution. """
     omega_dist = np.abs(2*zpb)
+    return omega_dist
+
+def washout_optimum_distribution(planform,zpb):
+    """ This finds the optimum washout distribution. """
+    # Select the case for the wing planform
+    match planform:
+        case "elliptic":
+            omega_dist = 1 - (np.sqrt(1-(2*zpb)**2)/)
+        case "tapered":
+            pass
     return omega_dist
 
 # ==========================================================================================
