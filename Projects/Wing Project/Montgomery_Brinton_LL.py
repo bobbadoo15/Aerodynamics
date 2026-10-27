@@ -48,8 +48,8 @@ def main(pi):
     # Import JSON content from 'input.json'
     a,alo,CLa_tilde,nodes,\
     planform,RA,RT,view_planform,\
-    view_washout_dist,washout_amount,\
-    washout_type,CL_design = load_input_data()
+    view_washout_dist,Omega_value,\
+    washout_type,CLd = load_input_data()
     # Create the number of nodes along the semispan
     total_nodes = node(nodes)
     # Preallocate arrays
@@ -57,17 +57,17 @@ def main(pi):
     # Calculate for the theta values
     theta,zpb = cov(total_nodes,pi)
     # Define the Washout of the wing
-    omega_dist = washout(planform,washout_type,zpb)
+    omega_dist,Omega_opt = washout(CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb)
     # Define the shape of the wing
     an,bn,c,cinv,cpb,CL,CLa,CDi,eps_Omega,\
-    es,kL,kD,kDL,kDOmega,omega_dist = geometry(a,alo,B,CLa_tilde,c,cinv,planform,total_nodes,omega_dist,
-                                    RA,RT,theta,washout_amount,washout_type,zpb,pi)
+    es,kL,kD,kDL,kDOmega,omega_dist = geometry(a,alo,B,CLa_tilde,CLd,c,cinv,planform,total_nodes,omega_dist,
+                                    Omega_opt,RA,RT,theta,Omega_value,washout_type,zpb,pi)
     # Print, output results
     results(an,bn,c,cinv,cpb,CDi,CL,CLa,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,theta,zpb)
     # Plot the planform
-    # PlotPlanform(cpb,greek,planform,view_planform,zpb)
+    PlotPlanform(cpb,greek,planform,view_planform,zpb)
     # Plot the washout distribution
-    # PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb)
+    PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb)
 
 # ==========================================================================================
 #                                       NODAL COUNT
@@ -151,14 +151,17 @@ def load_input_data():
     # Load viewing options
     view_planform = data["view"]["planform"]
     view_washout_dist = data["view"]["washout_distribution"]
-    # Load washout amount in radians
-    washout_amount = np.deg2rad(data["wing"]["washout"]["amount[deg]"])
+    # Load washout amount
+    Omega_value = data["wing"]["washout"]["amount[deg]"]
+    # Convert to radians unless calculating optimum washout
+    if Omega_value != "optimum":
+        Omega_value = np.deg2rad(Omega_value)
     # Load washout distribution type
     washout_type = data["wing"]["washout"]["distribution"]
     # Load the lift coefficient from design
-    CL_design = data["wing"]["washout"]["CL_design"]
+    CLd = data["wing"]["washout"]["CL_design"]
     return a, alo, CLa_tilde, nodes, planform, RA, RT, view_planform, view_washout_dist, \
-           washout_amount, washout_type, CL_design
+           Omega_value, washout_type, CLd
 
 # ==========================================================================================
 #                                    AIRFOIL FUNCTIONS
@@ -176,7 +179,7 @@ def chord_distribution(planform,RA,RT,zpb,pi):
             raise ValueError(f"Unknown planform: {planform}")
     return cpb
 
-def geometry(a,alo,B,CLa_tilde,c,cinv,planform,N,omega_dist,RA,RT,theta,washout_amount,
+def geometry(a,alo,B,CLa_tilde,CLd,c,cinv,planform,N,omega_dist,Omega_opt,RA,RT,theta,Omega_value,
              washout_type, zpb, pi):
     """Calculate aerodynamic properties of the wing."""
     # Calculate chord distribution
@@ -201,11 +204,20 @@ def geometry(a,alo,B,CLa_tilde,c,cinv,planform,N,omega_dist,RA,RT,theta,washout_
     match washout_type:
         case "none":
             omega_dist = np.zeros(N)
-            CL = CLa*(a-alo)
+            CL  = CLa*(a-alo)
             CDi = CL**2*(1+kD)/(pi*RA)
         case "linear":
-            CL = CLa*((a-alo)-(eps_Omega*washout_amount))
-            CDi = (CL**2*(1+kD) - kDL*CL*CLa*washout_amount + kDOmega*(CLa*washout_amount)**2)/(pi*RA)
+            if Omega_opt == "optimum":
+                if np.isclose(kDOmega, 0.0):
+                    raise ValueError("Cannot optimize linear washout: kDOmega is zero.")
+                Omega_opt = (kDL*CLd)/(2*kDOmega*CLa)
+            CL  = CLa*((a-alo)-(eps_Omega*Omega_opt))
+            CDi = (CL**2*(1+kD) - kDL*CL*CLa*Omega_opt + kDOmega*(CLa*Omega_opt)**2)/(pi*RA)
+        case "optimum":
+            CL  = CLa*((a-alo)-(eps_Omega*Omega_opt))
+            CDi = (CL**2*(1+kD) - kDL*CL*CLa*Omega_opt + kDOmega*(CLa*Omega_opt)**2)/(pi*RA)
+        case _:
+            raise ValueError(f"Unknown washout type: {washout_type}")
     return (an,bn,c,cinv,cpb,CL,CLa,CDi,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist)
 
 # ==========================================================================================
@@ -265,12 +277,10 @@ def factors(an, a1, bn, b1, CLa_tilde, planform, RA):
         for i in range(1, len(an)):
             n = i + 1
             a_ratio = an[i]/a1
-            b_ratio = bn[i]/b1
-            kDL += n*a_ratio*(b_ratio-a_ratio)
-            kDOmega += n*(b_ratio-a_ratio)**2
-        kDL *= 2*eps_Omega
-        kDOmega *= eps_Omega**2
-    return eps_Omega, kL, kD, kDL, kDOmega, es
+            difference = bn[i]/a1 - eps_Omega*a_ratio
+            kDL += 2*n*a_ratio*difference
+            kDOmega += n*difference**2
+    return (eps_Omega, kL, kD, kDL, kDOmega, es)
 
 def fourier(B,c,omega_dist,washout_type):
     """ This is where the fourier series coefficients are found. """
@@ -279,10 +289,10 @@ def fourier(B,c,omega_dist,washout_type):
     match washout_type:
         case "none":
             bn = None
-        case "linear":
+        case "linear" | "optimum":
             bn = np.linalg.solve(c,omega_dist)
-        case "optimum":
-            pass
+        case _:
+            raise ValueError(f"Unknown washout type: {washout_type}")
     return an, bn
 
 def preallocate(N):
@@ -326,33 +336,58 @@ def results(an,bn,c,cinv,cpb,CDi,CL,CLa,eps_Omega,es,greek,kD,kDL,kDOmega,kL,ome
     print(f"CDi   ={CDi:18.12f}")
     print("==============================================\n")
 
-def washout(planform,washout_type,zpb):
+def washout(CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb):
     """ This is where washout is calculated. """
     match washout_type:
         case "none":
             omega_dist = np.zeros_like(zpb)
+            Omega_opt  = 0.0
         case "linear":
-            omega_dist = washout_linear_distribution(zpb)
+            omega_dist = np.abs(2*zpb)
+            match planform:
+                case "elliptic":
+                    match Omega_value:
+                        case int() | float():
+                            Omega_opt = Omega_value
+                        case "optimum":
+                            Omega_opt = 0.0
+                        case _:
+                            raise ValueError(f"Unknown washout amount type: {Omega_value}")
+                case "tapered":
+                    match Omega_value:
+                        case int() | float():
+                            Omega_opt = Omega_value
+                        case "optimum":
+                            Omega_opt = "optimum"
+                        case _:
+                            raise ValueError(f"Unknown washout amount type: {Omega_value}")
+                case _:
+                    raise ValueError(f"Unknown planform type: {planform}")
         case "optimum":
-            omega_dist = washout_optimum_distribution(planform,zpb)
+            omega_dist,Omega_opt = washout_optimum_distribution(CLa_tilde,CLd,Omega_value,planform,RT,zpb)
         case _:
             raise ValueError(f"Unknown washout type: {washout_type}")
-    return omega_dist
+    return omega_dist,Omega_opt
 
-def washout_linear_distribution(zpb):
-    """ This calculates the washout distribution. """
-    omega_dist = np.abs(2*zpb)
-    return omega_dist
-
-def washout_optimum_distribution(planform,zpb):
+def washout_optimum_distribution(CLa_tilde,CLd,Omega_value,planform,RT,zpb):
     """ This finds the optimum washout distribution. """
     # Select the case for the wing planform
     match planform:
         case "elliptic":
-            omega_dist = 1 - (np.sqrt(1-(2*zpb)**2)/)
+            omega_dist = np.zeros_like(zpb)
+            Omega_opt = 0.0
         case "tapered":
-            pass
-    return omega_dist
+            omega_dist = 1 - (np.sqrt(1-(2*zpb)**2)) / (1 - (1-RT)*np.abs(2*zpb))
+            match Omega_value:
+                case int() | float():
+                    Omega_opt = Omega_value
+                case "optimum":
+                    Omega_opt = (2*(1+RT)*CLd) / (pi*CLa_tilde)
+                case _:
+                    raise ValueError(f"Unknown washout amount: {Omega_value}")
+        case _:
+            raise ValueError(f"Unknown planform type: {planform}")
+    return omega_dist, Omega_opt
 
 # ==========================================================================================
 #                                        PLOTTING
