@@ -36,6 +36,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 import sys
+import os
 
 # ==========================================================================================
 #                                          MAIN
@@ -63,11 +64,13 @@ def main(pi):
     es,kL,kD,kDL,kDOmega,omega_dist = geometry(a,alo,B,CLa_tilde,CLd,c,cinv,planform,total_nodes,omega_dist,
                                     Omega_opt,RA,RT,theta,Omega_value,washout_type,zpb,pi)
     # Print, output results
-    results(an,bn,c,cinv,cpb,CDi,CL,CLa,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,theta,zpb)
+    # results(an,bn,c,cinv,cpb,CDi,CL,CLa,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,theta,zpb)
     # Plot the planform
-    PlotPlanform(cpb,greek,planform,view_planform,zpb)
+    # PlotPlanform(cpb,greek,planform,view_planform,zpb)
     # Plot the washout distribution
-    PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb)
+    # PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb)
+    # Plot the CDi
+    PlotCDi(CDi,CL)
 
 # ==========================================================================================
 #                                       NODAL COUNT
@@ -392,6 +395,10 @@ def washout_optimum_distribution(CLa_tilde,CLd,Omega_value,planform,RT,zpb):
 # ==========================================================================================
 #                                        PLOTTING
 # ==========================================================================================
+
+def PlotCDi(CDi,CL):
+    """ This plots the CDi of the specified case. """
+
 
 def PlotPlanform(cpb,greek,planform,view_planform,zpb):
     """ This displays the desired lifitng-line for a given wingspan. """
