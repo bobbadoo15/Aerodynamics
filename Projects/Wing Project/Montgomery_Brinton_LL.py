@@ -61,7 +61,7 @@ def main(pi):
     omega_dist,Omega_opt = washout(CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb)
     # Define the shape of the wing
     an,bn,c,cinv,cpb,CL,CLa,CDi,eps_Omega,\
-    es,kL,kD,kDL,kDOmega,omega_dist = geometry(a,alo,B,CLa_tilde,CLd,c,cinv,planform,total_nodes,omega_dist,
+    es,kL,kD,kDL,kDOmega,omega_dist,Omega_opt = geometry(a,alo,B,CLa_tilde,CLd,c,cinv,planform,total_nodes,omega_dist,
                                     Omega_opt,RA,RT,theta,Omega_value,washout_type,zpb,pi)
     # Print, output results
     # results(an,bn,c,cinv,cpb,CDi,CL,CLa,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,theta,zpb)
@@ -70,7 +70,7 @@ def main(pi):
     # Plot the washout distribution
     # PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb)
     # Plot the CDi
-    PlotCDi(CDi,CL)
+    PlotCDi(a,alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega_opt,planform,RA,washout_type)
 
 # ==========================================================================================
 #                                       NODAL COUNT
@@ -221,7 +221,7 @@ def geometry(a,alo,B,CLa_tilde,CLd,c,cinv,planform,N,omega_dist,Omega_opt,RA,RT,
             CDi = (CL**2*(1+kD) - kDL*CL*CLa*Omega_opt + kDOmega*(CLa*Omega_opt)**2)/(pi*RA)
         case _:
             raise ValueError(f"Unknown washout type: {washout_type}")
-    return (an,bn,c,cinv,cpb,CL,CLa,CDi,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist)
+    return (an,bn,c,cinv,cpb,CL,CLa,CDi,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist,Omega_opt)
 
 # ==========================================================================================
 #                                   CALCULATED RESULTS
@@ -396,9 +396,75 @@ def washout_optimum_distribution(CLa_tilde,CLd,Omega_value,planform,RT,zpb):
 #                                        PLOTTING
 # ==========================================================================================
 
-def PlotCDi(CDi,CL):
+def PlotCDi(a,alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega,planform,RA,washout_type):
     """ This plots the CDi of the specified case. """
-
+    # Convert alpha input back to deg
+    a = np.rad2deg(a)
+    # Create an array of alphas
+    alpha_deg = np.linspace(-12,12,100)
+    alpha_rad = np.deg2rad(alpha_deg)
+    # Create an array of CL
+    CL = CLa*((alpha_rad-alo)-(eps_Omega*Omega))
+    # Create an array of CDi
+    CDi = ((CL**2*(1+kD))-(kDL*CL*CLa*Omega)+(kDOmega*(CLa*Omega)**2)) / (pi*RA)
+    # Store the arrays
+    script_dir = Path(__file__).parent
+    output_path = script_dir/f"CL_CDi_with_{washout_type}_washout.txt"
+    data = np.column_stack((alpha_deg,alpha_rad,CL,CDi))
+    np.savetxt(
+        output_path,
+        data,
+        header="alpha[deg] alpha[rad] CL CDi",
+        fmt="%.12f"
+    )
+    # Check whether both cases have been calculated
+    none_path = script_dir/"CL_CDi_with_none_washout.txt"
+    linear_path = script_dir/"CL_CDi_with_linear_washout.txt"
+    if none_path.exists() and linear_path.exists():
+        # Create the font family for the plot
+        plt.rcParams.update({
+            "font.family": "serif",
+            "font.serif": ["Times New Roman"],
+            "mathtext.fontset": "stix",
+            "font.size": 12,
+            "axes.titlesize": 16,
+            "axes.labelsize": 14,
+        })
+        # Load both datasets
+        none = np.loadtxt(none_path)
+        linear = np.loadtxt(linear_path)
+        # Create figure
+        fig, ax = plt.subplots()
+        # Plot no washout
+        ax.plot(none[:,2], none[:,3],
+                color="black",
+                linewidth=2.5,
+                label="No Washout")
+        # Plot 5-degree linear washout
+        ax.plot(linear[:,2], linear[:,3],
+                color="orange",
+                linestyle="--",
+                linewidth=2.0,
+                label=f"{a}° {washout_type} Washout")
+        # Format plot
+        ax.set_title(rf"{planform.capitalize()} Wing $C_{{D_i}}$ Comparison",
+                     fontsize=16,
+                     fontfamily="serif",
+                     fontweight="bold")
+        ax.set_xlabel(r"$C_L$",fontsize=14)
+        ax.set_ylabel(r"$C_{D_i}$",fontsize=14)
+        ax.grid(True)
+        ax.legend()
+        # Format plot borders
+        for spine in ax.spines.values():
+            spine.set_linewidth(1.5)
+        # Format ticks
+        ax.tick_params(axis="both",
+                    which="major",
+                    width=1.5,
+                    length=6,
+                    direction="out")
+        plt.show()
 
 def PlotPlanform(cpb,greek,planform,view_planform,zpb):
     """ This displays the desired lifitng-line for a given wingspan. """
@@ -460,7 +526,7 @@ def PlotPlanform(cpb,greek,planform,view_planform,zpb):
 def PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb):
     """ This plots the washout distribution. """
     if view_washout_dist:
-    # Create the font family for the plot
+        # Create the font family for the plot
         plt.rcParams.update({
             "font.family": "serif",
             "font.serif": ["Times New Roman"],

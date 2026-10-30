@@ -10,7 +10,7 @@
         "airfoil_lift_slope": 6.283185307179590,
         "nodes_per_semispan": 50,
         "washout": {
-            "distribution": "optimum",
+            "distribution": "linear",
             "distribution_options": [["none: no twist"],
                                      ["linear: linear twist distribution"],
                                      ["optimum: optimum twist distribution"]],
