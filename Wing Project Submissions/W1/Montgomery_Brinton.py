@@ -24,6 +24,8 @@ import sys
 
 def main(pi):
     """ This contains the structure of the program. """
+    # Import greek alphabet for display only
+    greek = Greek()
     # Import JSON content from 'input.json'
     a, alo, CLa_tilde, nodes, planform, RA, RT, view_planform = load_input_data()
     # Create the number of nodes along the semispan
@@ -35,7 +37,7 @@ def main(pi):
     # Define the shape of the wing
     an, c, cinv, cpb, CL, CLa, CDi, es, kL, kD = geometry(a,alo,B,CLa_tilde,c,cinv,planform,total_nodes,RA,RT,theta,zpb,pi)
     # Print, output results
-    # results(an,c,cinv,cpb,CDi,CL,CLa,es,kD,kL,theta,zpb)
+    results(an,c,cinv,cpb,CDi,CL,CLa,es,greek,kD,kL,theta,zpb)
     # Plot the planform
     PlotPlanform(cpb,planform,view_planform,zpb)
 
@@ -77,6 +79,36 @@ def cov(total_nodes,pi):
 #                            IMPORTING "input.json" INFORMATION
 # ==========================================================================================
 
+def Greek():
+    """ This stores greek unicode values. """
+    greek = {
+    'alpha'  : {'lower': '\u03B1', 'upper': '\u0391'},
+    'beta'   : {'lower': '\u03B2', 'upper': '\u0392'},
+    'gamma'  : {'lower': '\u03B3', 'upper': '\u0393'},
+    'delta'  : {'lower': '\u03B4', 'upper': '\u0394'},
+    'epsilon': {'lower': '\u03B5', 'upper': '\u0395'},
+    'zeta'   : {'lower': '\u03B6', 'upper': '\u0396'},
+    'eta'    : {'lower': '\u03B7', 'upper': '\u0397'},
+    'theta'  : {'lower': '\u03B8', 'upper': '\u0398'},
+    'iota'   : {'lower': '\u03B9', 'upper': '\u0399'},
+    'kappa'  : {'lower': '\u03BA', 'upper': '\u039A'},
+    'lambda' : {'lower': '\u03BB', 'upper': '\u039B'},
+    'mu'     : {'lower': '\u03BC', 'upper': '\u039C'},
+    'nu'     : {'lower': '\u03BD', 'upper': '\u039D'},
+    'xi'     : {'lower': '\u03BE', 'upper': '\u039E'},
+    'omicron': {'lower': '\u03BF', 'upper': '\u039F'},
+    'pi'     : {'lower': '\u03C0', 'upper': '\u03A0'},
+    'rho'    : {'lower': '\u03C1', 'upper': '\u03A1'},
+    'sigma'  : {'lower': '\u03C3', 'upper': '\u03A3'},  # Word-final lowercase variant is '\u03C2' (ς)
+    'tau'    : {'lower': '\u03C4', 'upper': '\u03A4'},
+    'upsilon': {'lower': '\u03C5', 'upper': '\u03A5'},
+    'phi'    : {'lower': '\u03C6', 'upper': '\u03A6'},
+    'chi'    : {'lower': '\u03C7', 'upper': '\u03A7'},
+    'psi'    : {'lower': '\u03C8', 'upper': '\u03A8'},
+    'omega'  : {'lower': '\u03C9', 'upper': '\u03A9'}
+}
+    return greek
+
 def load_input_data():
     """ This imports all content from the 'input.json' file. """
     # Define the input path
@@ -87,19 +119,19 @@ def load_input_data():
         data = json.load(file)
     # ====== Store data values ======
     # Define alpha in radians
-    a = data["condition"]["alpha_root[deg]"] * (pi/180)
+    a = float(np.deg2rad(data["condition"]["alpha_root[deg]"]))
     # Define zero-lift alpha
-    alo = 0 # ---> we are assuming 0 due to TAT, replace when told otherwise
+    alo = 0.0 # ---> we are assuming 0 due to TAT, replace when told otherwise
     # Define section lift slope
-    CLa_tilde = data["wing"]["airfoil_lift_slope"]
+    CLa_tilde = float(data["wing"]["airfoil_lift_slope"])
     # Import the total number of desired nodes
-    nodes = data["wing"]["nodes_per_semispan"]
+    nodes = int(data["wing"]["nodes_per_semispan"])
     # Decide how the geometry should be directed
     planform = data["wing"]["planform"]["type"]
     # Find the aspect ratio
-    RA = data["wing"]["planform"]["aspect_ratio"]
+    RA = float(data["wing"]["planform"]["aspect_ratio"])
     # Find the tapered ratio
-    RT = data["wing"]["planform"]["taper_ratio"]
+    RT = float(data["wing"]["planform"]["taper_ratio"])
     # Load viewing options
     view_planform = data["view"]["planform"]
     return a, alo, CLa_tilde, nodes, planform, RA, RT, view_planform
@@ -121,7 +153,7 @@ def elliptic(a,alo,B,CLa_tilde,c,cinv,N,RA,theta,zpb,pi):
     # Define induced drag and lift factors
     kL = 0
     kD = 0
-    es = None
+    es = 1.0
     # Define lift slope
     CLa = CLa_tilde / (1 + (CLa_tilde/(pi*RA)))
     # Find lift coefficient
@@ -214,41 +246,31 @@ def preallocate(N):
     B = np.ones(N)
     return B, c, cinv
     
-def results(an,c,cinv,cpb,CDi,CL,CLa,es,kD,kL,theta,zpb):
+def results(an,c,cinv,cpb,CDi,CL,CLa,es,greek,kD,kL,theta,zpb):
     """ This is where the final results are found. """
     # ========= Write out to a txt file =========
     script_dir = Path(__file__).parent
     output_path = script_dir/"Solution.txt"
     f = open(output_path,"w")
-    # Theta
-    f.write("\n================ THETA ===============\n")
-    np.savetxt(f, theta, fmt="%18.12f")
-    # z/b along the wingspan
-    f.write("\n================= Z/B ================\n")
-    np.savetxt(f, zpb, fmt="%18.12f")
-    # c/b along the wingspan
-    f.write("\n================= C/B ================\n")
-    np.savetxt(f, cpb, fmt="%18.12f")
-    # Matrices
     f.write("\n============== C-MATRIX ==============\n")
     np.savetxt(f, c, fmt="%18.12f")
     f.write("\n========== C-MATRIX INVERSE ==========\n")
     np.savetxt(f, cinv, fmt="%18.12f")
-    f.write("\n======== LIFT SLOPE FACTOR, kL =======\n")
-    np.savetxt(f, [kL], fmt="%18.12f")
-    f.write("\n======= INDUCED DRAG FACTOR, kD ======\n")
-    np.savetxt(f, [kD], fmt="%18.12f")
-    f.write("\n====== SPAN EFFICIENCY FACTOR, es ====\n")
-    np.savetxt(f, [es], fmt="%18.12f")
-    f.write("\n========== LIFT SLOPE, CLa ===========\n")
-    np.savetxt(f,[CLa], fmt="%18.12f")
-    f.write("\n======== LIFT COEFFICIENT, CL ========\n")
-    np.savetxt(f, [CL], fmt="%18.12f")
-    f.write("\n========== INDUCED DRAG, CDi =========\n")
-    np.savetxt(f, [CDi], fmt="%18.12f")
     f.write("\n========== FOURIER SERIES, an ========\n")
     np.savetxt(f, an, fmt="%18.12f")
     f.close()
+    # Print the solutions to the screen
+    print()
+    print("==============================================")
+    print("            AERODYNAMIC PROPERTIES")
+    print("==============================================")
+    print(f"{greek['kappa']['lower']}L    ={kL:18.12f}")
+    print(f"{greek['kappa']['lower']}D    ={kD:18.12f}")
+    print(f"es    ={es:18.12f}")
+    print(f"CL{greek['alpha']['lower']}   ={CLa:18.12f}")
+    print(f"CL    ={CL:18.12f}")
+    print(f"CDi   ={CDi:18.12f}")
+    print("==============================================\n")
 
 # ==========================================================================================
 #                                        PLOTTING
@@ -308,7 +330,7 @@ def PlotPlanform(cpb,planform,view_planform,zpb):
 
         plt.show()
     else:
-        print("Displaying planform view is disabled. Goodbye!")
+        print("Displaying planform view is disabled.")
         sys.exit()
 
 # ==========================================================================================
