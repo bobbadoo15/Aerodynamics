@@ -35,7 +35,6 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
-import sys
 
 # ==========================================================================================
 #                                          MAIN
@@ -135,19 +134,19 @@ def load_input_data():
         data = json.load(file)
     # ====== Store data values ======
     # Define alpha in radians
-    a = np.deg2rad(data["condition"]["alpha_root[deg]"])
+    a = np.deg2rad(float(data["condition"]["alpha_root[deg]"]))
     # Define zero-lift alpha
-    alo = 0 # ---> we are assuming 0 due to TAT, replace when told otherwise
+    alo = 0.0 # ---> we are assuming 0 due to TAT, replace when told otherwise
     # Define section lift slope
-    CLa_tilde = data["wing"]["airfoil_lift_slope"]
+    CLa_tilde = float(data["wing"]["airfoil_lift_slope"])
     # Import the total number of desired nodes
-    nodes = data["wing"]["nodes_per_semispan"]
+    nodes = int(data["wing"]["nodes_per_semispan"])
     # Decide how the geometry should be directed
     planform = data["wing"]["planform"]["type"]
     # Find the aspect ratio
-    RA = data["wing"]["planform"]["aspect_ratio"]
+    RA = float(data["wing"]["planform"]["aspect_ratio"])
     # Find the tapered ratio
-    RT = data["wing"]["planform"]["taper_ratio"]
+    RT = float(data["wing"]["planform"]["taper_ratio"])
     # Load viewing options
     view_planform = data["view"]["planform"]
     view_washout_dist = data["view"]["washout_distribution"]
@@ -155,11 +154,11 @@ def load_input_data():
     Omega_value = data["wing"]["washout"]["amount[deg]"]
     # Convert to radians unless calculating optimum washout
     if Omega_value != "optimum":
-        Omega_value = np.deg2rad(Omega_value)
+        Omega_value = float(np.deg2rad(Omega_value))
     # Load washout distribution type
     washout_type = data["wing"]["washout"]["distribution"]
     # Load the lift coefficient from design
-    CLd = data["wing"]["washout"]["CL_design"]
+    CLd = float(data["wing"]["washout"]["CL_design"])
     return a, alo, CLa_tilde, nodes, planform, RA, RT, view_planform, view_washout_dist, \
            Omega_value, washout_type, CLd
 
@@ -327,7 +326,7 @@ def results(an,bn,c,cinv,cpb,CDi,CL,CLa,eps_Omega,es,greek,kD,kDL,kDOmega,kL,ome
     print("==============================================")
     print(f"{greek['kappa']['lower']}L    ={kL:18.12f}")
     print(f"{greek['kappa']['lower']}D    ={kD:18.12f}")
-    print(f"{greek['epsilon']['lower']}s    ={es:18.12f}")
+    print(f"es    ={es:18.12f}")
     print(f"CL{greek['alpha']['lower']}   ={CLa:18.12f}")
     print(f"{greek['epsilon']['lower']}{greek['omega']['upper']}    ={eps_Omega:18.12f}")
     print(f"{greek['kappa']['lower']}DL   ={kDL:18.12f}")
@@ -447,8 +446,7 @@ def PlotPlanform(cpb,greek,planform,view_planform,zpb):
 
         plt.show()
     else:
-        print("Displaying planform view is disabled. Goodbye!")
-        sys.exit()
+        print("Displaying planform view is disabled.")
 
 def PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb):
     """ This plots the washout distribution. """
@@ -482,7 +480,7 @@ def PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb):
                         fontfamily="serif",
                         fontweight="bold")
         ax.set_xlabel(r"$\mathbfit{z/b}$", fontsize=14)
-        ax.set_ylabel(r"$\mathbfit{c/b}$", fontsize=14) 
+        ax.set_ylabel(rf"$\mathbfit{{{greek['omega']['lower']}({greek['theta']['lower']})}}$", fontsize=14)        
         ax.set_aspect("equal")
         ax.grid(False)
         # Format plot borders
@@ -502,8 +500,7 @@ def PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb):
 
         plt.show()
     else:
-        print("Displaying planform view is disabled. Goodbye!")
-        sys.exit()
+        print("Displaying the washout distribution view is disabled.")
 
 # ==========================================================================================
 #                                     RUNNING PROGRAM
