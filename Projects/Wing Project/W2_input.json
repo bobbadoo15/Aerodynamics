@@ -1,7 +1,7 @@
 {
     "wing": {
         "planform": {
-            "type": "elliptic",
+            "type": "tapered",
             "type_options": [["elliptic: (requires aspect_ratio)"],
                              ["tapered:  (requres aspect_ratio and taper_ratio)"]],
             "aspect_ratio": 8,
@@ -10,7 +10,7 @@
         "airfoil_lift_slope": 6.283185307179590,
         "nodes_per_semispan": 50,
         "washout": {
-            "distribution": "linear",
+            "distribution": "none",
             "distribution_options": [["none: no twist"],
                                      ["linear: linear twist distribution"],
                                      ["optimum: optimum twist distribution"]],
@@ -24,8 +24,8 @@
         "alpha_root[deg]": 5
     },
     "view": {
-        "planform": false,
-        "washout_distribution": false,
+        "planform": true,
+        "washout_distribution": true,
         "induced_drag": true
     }
 }
