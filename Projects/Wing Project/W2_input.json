@@ -24,8 +24,8 @@
         "alpha_root[deg]": 5
     },
     "view": {
-        "planform": true,
-        "washout_distribution": true,
+        "planform": false,
+        "washout_distribution": false,
         "induced_drag": true
     }
 }
