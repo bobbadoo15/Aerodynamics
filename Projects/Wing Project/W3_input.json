@@ -8,7 +8,7 @@
             "taper_ratio": 0.5
         },
         "airfoil_lift_slope": 6.283185307179590,
-        "nodes_per_semispan": 50,
+        "nodes_per_semispan": 4,
         "washout": {
             "distribution": "optimum",
             "distribution_options": [["none: no twist"],
@@ -18,13 +18,26 @@
             "amount_options": [["value: real number in degrees"],
                                ["optimum: requres CL_design"]],
             "CL_design": 0.8
+        },
+        "aileron": {
+            "begin[z/b]": 0.22,
+            "end[z/b]": 0.45,
+            "begin[cf/c]": 0.18,
+            "end[cf/c]": 0.18,
+            "hinge_efficiency": 0.85
         }
     },
     "condition": {
-        "alpha_root[deg]": 5.0
+        "alpha_root[deg]": 5.0,
+        "aileron_deflection[deg]": 5.0,
+        "pbar": "steady",
+        "pbar_notes": [["value: entered value"],
+                       ["'steady': Calculated value using MEq.1.8.59; Cl = 0"]]
     },
     "view": {
-        "planform": true,
-        "washout_distribution": true
+        "planform": false,
+        "washout_distribution": false,
+        "aileron_distrobution": false,
+        "induced_drag": false
     }
 }
