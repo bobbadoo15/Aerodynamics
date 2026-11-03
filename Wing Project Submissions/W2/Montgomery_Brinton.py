@@ -49,7 +49,7 @@ def main(pi):
     # Import JSON content from 'input.json'
     a,alo,CLa_tilde,nodes,\
     planform,RA,RT,view_planform,\
-    view_washout_dist,Omega_value,\
+    view_washout_dist,view_idrag,Omega_value,\
     washout_type,CLd = load_input_data()
     # Create the number of nodes along the semispan
     total_nodes = node(nodes)
@@ -70,7 +70,7 @@ def main(pi):
     # Plot the washout distribution
     PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb)
     # Plot the CDi
-    PlotCDi(a,alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega_opt,planform,RA,washout_type)
+    PlotCDi(alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega_opt,planform,RA,view_idrag,washout_type)
 
 # ==========================================================================================
 #                                       NODAL COUNT
@@ -154,6 +154,7 @@ def load_input_data():
     # Load viewing options
     view_planform = data["view"]["planform"]
     view_washout_dist = data["view"]["washout_distribution"]
+    view_idrag = data["view"]["induced_drag"]
     # Load washout amount
     Omega_value = data["wing"]["washout"]["amount[deg]"]
     # Convert to radians unless calculating optimum washout
@@ -164,7 +165,7 @@ def load_input_data():
     # Load the lift coefficient from design
     CLd = float(data["wing"]["washout"]["CL_design"])
     return a, alo, CLa_tilde, nodes, planform, RA, RT, view_planform, view_washout_dist, \
-           Omega_value, washout_type, CLd
+           view_idrag,Omega_value, washout_type, CLd
 
 # ==========================================================================================
 #                                    AIRFOIL FUNCTIONS
@@ -396,31 +397,36 @@ def washout_optimum_distribution(CLa_tilde,CLd,Omega_value,planform,RT,zpb):
 #                                        PLOTTING
 # ==========================================================================================
 
-def PlotCDi(a,alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega,planform,RA,washout_type):
-    """ This plots the CDi of the specified case. """
-    # Convert alpha input back to deg
-    a = np.rad2deg(a)
-    # Create an array of alphas
-    alpha_deg = np.linspace(-12,12,100)
-    alpha_rad = np.deg2rad(alpha_deg)
-    # Create an array of CL
-    CL = CLa*((alpha_rad-alo)-(eps_Omega*Omega))
-    # Create an array of CDi
-    CDi = ((CL**2*(1+kD))-(kDL*CL*CLa*Omega)+(kDOmega*(CLa*Omega)**2)) / (pi*RA)
-    # Store the arrays
-    script_dir = Path(__file__).parent
-    output_path = script_dir/f"CL_CDi_with_{washout_type}_washout.txt"
-    data = np.column_stack((alpha_deg,alpha_rad,CL,CDi))
-    np.savetxt(
-        output_path,
-        data,
-        header="alpha[deg] alpha[rad] CL CDi",
-        fmt="%.12f"
-    )
-    # Check whether both cases have been calculated
-    none_path = script_dir/"CL_CDi_with_none_washout.txt"
-    linear_path = script_dir/"CL_CDi_with_linear_washout.txt"
-    if none_path.exists() and linear_path.exists():
+def PlotCDi(alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega,planform,RA,view_idrag,washout_type):
+    """ Plot CDi vs CL for no twist and linear twist. """
+    if view_idrag == True:
+        # Create an array of alphas
+        alpha_deg = np.linspace(-12,12,100)
+        alpha_rad = np.deg2rad(alpha_deg)
+        # Calculate CL without twist
+        CL_none = CLa*(alpha_rad-alo)
+        # Calculate CL with linear twist
+        CL_linear = CLa*((alpha_rad-alo)-(eps_Omega*Omega))
+        # Calculate CDi without twist
+        CDi_none = (CL_none**2*(1+kD))/(np.pi*RA)
+        # Calculate CDi with linear twist
+        CDi_linear = (
+            CL_linear**2*(1+kD)
+            - kDL*CL_linear*CLa*Omega
+            + kDOmega*(CLa*Omega)**2
+        )/(np.pi*RA)
+        # Store the arrays
+        script_dir = Path(__file__).parent
+        output_path = script_dir/"CL_CDi_comparison.txt"
+        data = np.column_stack((
+            alpha_deg,CL_none,CDi_none,CL_linear,CDi_linear
+        ))
+        np.savetxt(
+            output_path,
+            data,
+            header="alpha[deg] CL_none CDi_none CL_linear CDi_linear",
+            fmt="%.12f"
+        )
         # Create the font family for the plot
         plt.rcParams.update({
             "font.family": "serif",
@@ -430,27 +436,26 @@ def PlotCDi(a,alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega,planform,RA,washout_type):
             "axes.titlesize": 16,
             "axes.labelsize": 14,
         })
-        # Load both datasets
-        none = np.loadtxt(none_path)
-        linear = np.loadtxt(linear_path)
         # Create figure
         fig, ax = plt.subplots()
-        # Plot no washout
-        ax.plot(none[:,2], none[:,3],
+        # Plot no twist
+        ax.plot(CL_none,CDi_none,
                 color="black",
                 linewidth=2.5,
-                label="No Washout")
-        # Plot 5-degree linear washout
-        ax.plot(linear[:,2], linear[:,3],
+                label="No Twist")
+        # Plot linear twist
+        ax.plot(CL_linear,CDi_linear,
                 color="orange",
                 linestyle="--",
                 linewidth=2.0,
-                label=f"{a}° {washout_type} Washout")
+                label=f"{np.rad2deg(Omega):.1f}° Linear Twist")
         # Format plot
-        ax.set_title(rf"{planform.capitalize()} Wing $C_{{D_i}}$ Comparison",
-                     fontsize=16,
-                     fontfamily="serif",
-                     fontweight="bold")
+        ax.set_title(
+            rf"{planform.capitalize()} Wing $C_{{D_i}}$ Comparison",
+            fontsize=16,
+            fontfamily="serif",
+            fontweight="bold"
+        )
         ax.set_xlabel(r"$C_L$",fontsize=14)
         ax.set_ylabel(r"$C_{D_i}$",fontsize=14)
         ax.grid(True)
@@ -459,12 +464,16 @@ def PlotCDi(a,alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega,planform,RA,washout_type):
         for spine in ax.spines.values():
             spine.set_linewidth(1.5)
         # Format ticks
-        ax.tick_params(axis="both",
-                    which="major",
-                    width=1.5,
-                    length=6,
-                    direction="out")
+        ax.tick_params(
+            axis="both",
+            which="major",
+            width=1.5,
+            length=6,
+            direction="out"
+        )
         plt.show()
+    else:
+        print("Displaying CDi view is disabled.")
 
 def PlotPlanform(cpb,greek,planform,view_planform,zpb):
     """ This displays the desired lifitng-line for a given wingspan. """
