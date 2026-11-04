@@ -300,6 +300,11 @@ def washout_optimum_distribution(CLa_tilde,CLd,Omega_value,planform,RT,zpb):
 #                                   CALCULATED RESULTS
 # ==========================================================================================
 
+def control_surface_distrubtion(z,zr,zt):
+    """ This finds the control surface distribution, χ (chi). """
+    if (z < -zt) or () or (z > zt):
+    return chi
+
 def cmatrix(c,cpb,CLa_tilde,N,theta):
     """ This is where the c-matrix is built. """
     for i in range(N):
