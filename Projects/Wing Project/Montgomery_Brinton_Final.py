@@ -37,7 +37,7 @@ import numpy as np
 from pathlib import Path
 import sys
 import os
-from scipy.interpolate import interp1d
+# from scipy.interpolate import interp1d
 
 # ==========================================================================================
 #                                          MAIN
@@ -195,7 +195,7 @@ def aileron(an,bn,cfpc_begin,cfpc_end,cpb,dn,eta_h,planform,RA,RT,zpb,zr,zt):
     # Find the chord flap fraction
     cfpc = flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT)
     # Find the local section flap effectiveness
-    # eps_f = flap_effectiveness(cfpc,eta_h,eta_d)
+    eps_f = flap_effectiveness(cfpc,eta_h,eta_d)
     # Find the control surface distribution
     # chi = control_surface_distrubtion(eps_f,zpb,zr,zt)
     
@@ -218,8 +218,8 @@ def control_surface_distrubtion(eps_f,z,zr,zt):
 
 def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT):
     # Find chord at aileron root and tip
-    cr = chord_distribution(planform, RA, RT, zr, np.pi)
-    ct = chord_distribution(planform, RA, RT, zt, np.pi)
+    cr = chord_distribution(planform, RA, RT, zr, pi)
+    ct = chord_distribution(planform, RA, RT, zt, pi)
     # Find hinge-line positions
     yr = (cfpc_begin - 0.75)*cr
     yt = (cfpc_end - 0.75)*ct
@@ -236,10 +236,13 @@ def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT):
             cfpc[i] = y/cpb[i] + 0.75
     return cfpc
 
-# def flap_effectiveness():
-#     """ This finds the flap effectiveness. """
-
-#     return eps_f,eps_fi
+def flap_effectiveness(cfpc,eta_h,eta_d):
+    """ This finds the flap effectiveness. """
+    # Find the change in variables
+    theta_f = np.acos(2.0*cfpc - 1.0)
+    # Find the ideal section flap effectiveness
+    eps_fi = 1 - ((theta_f - np.sin(theta_f))/pi)
+    return eps_f,eps_fi
 
 def geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,RT,theta,Omega_value,
              washout_type, zpb, pi):
