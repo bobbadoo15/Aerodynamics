@@ -37,6 +37,7 @@ import numpy as np
 from pathlib import Path
 import sys
 import os
+from scipy.interpolate import interp1d
 
 # ==========================================================================================
 #                                          MAIN
@@ -48,7 +49,7 @@ def main(pi):
     greek = Greek()
     # Import JSON content from 'input.json'
     a,alo,CLa_tilde,nodes,planform,RA,RT,view_planform,view_washout_dist,view_idrag,\
-        Omega_value,washout_type,CLd,view_aileron,zpb_begin,zpb_end,cfpc_begin,cfpc_end,\
+        Omega_value,washout_type,CLd,view_aileron,zr,zt,cfpc_begin,cfpc_end,\
             eta_h,delta_a = load_input_data()
     # Create the number of nodes along the semispan
     total_nodes = node(nodes)
@@ -63,7 +64,7 @@ def main(pi):
     = geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,total_nodes,omega_dist,Omega_opt,RA,RT\
                ,theta,Omega_value,washout_type,zpb,pi)
     # Calculate for aileron effects
-    # aileron(an,bn)
+    aileron(an,bn,cfpc_begin,cfpc_end,cpb,dn,eta_h,planform,RA,RT,zpb,zr,zt)
     # Print, output results
     results(an,bn,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,theta,zpb)
     # Plot the planform
@@ -95,6 +96,7 @@ def cov(total_nodes,pi):
     theta = np.linspace(0,pi,total_nodes)
     # Find the related z/b values
     zpb = -0.5 * np.cos(theta)
+    print(zpb)
     return theta, zpb
 
 # ==========================================================================================
@@ -158,7 +160,7 @@ def load_input_data():
     view_planform = data["view"]["planform"]
     view_washout_dist = data["view"]["washout_distribution"]
     view_idrag = data["view"]["induced_drag"]
-    view_aileron = data["view"]["aileron_distrobution"]
+    view_aileron = data["view"]["aileron_distribution"]
     # Load washout amount
     Omega_value = data["wing"]["washout"]["amount[deg]"]
     # Convert to radians unless calculating optimum washout
@@ -169,8 +171,8 @@ def load_input_data():
     # Load the lift coefficient from design
     CLd = float(data["wing"]["washout"]["CL_design"])
     # Import aileron effects
-    zpb_begin = float(data["wing"]["aileron"]["begin[z/b]"])
-    zpb_end = float(data["wing"]["aileron"]["end[z/b]"])
+    zr = float(data["wing"]["aileron"]["begin[z/b]"])
+    zt = float(data["wing"]["aileron"]["end[z/b]"])
     cfpc_begin = float(data["wing"]["aileron"]["begin[cf/c]"])
     cfpc_end = float(data["wing"]["aileron"]["end[cf/c]"])
     eta_h = float(data["wing"]["aileron"]["hinge_efficiency"])
@@ -179,16 +181,23 @@ def load_input_data():
     if pbar != "steady":
         pbar = float(np.deg2rad(pbar))
     return a,alo,CLa_tilde,nodes,planform,RA,RT,view_planform, view_washout_dist,view_idrag,\
-        Omega_value,washout_type,CLd,view_aileron,zpb_begin,zpb_end,cfpc_begin,cfpc_end,eta_h,\
+        Omega_value,washout_type,CLd,view_aileron,zr,zt,cfpc_begin,cfpc_end,eta_h,\
         delta_a
 
 # ==========================================================================================
 #                                    AIRFOIL FUNCTIONS
 # ==========================================================================================
 
-def aileron():
+def aileron(an,bn,cfpc_begin,cfpc_end,cpb,dn,eta_h,planform,RA,RT,zpb,zr,zt):
     """ This calculates for the aileron effects. """
-    pass
+    # Define the section flap deflection efficiency
+    eta_d = 1.0
+    # Find the chord flap fraction
+    cfpc = flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT)
+    # Find the local section flap effectiveness
+    # eps_f = flap_effectiveness(cfpc,eta_h,eta_d)
+    # Find the control surface distribution
+    # chi = control_surface_distrubtion(eps_f,zpb,zr,zt)
     
 def chord_distribution(planform,RA,RT,zpb,pi):
     """Calculate the normalized chord distribution."""
@@ -201,6 +210,36 @@ def chord_distribution(planform,RA,RT,zpb,pi):
         case _:
             raise ValueError(f"Unknown planform: {planform}")
     return cpb
+
+def control_surface_distrubtion(eps_f,z,zr,zt):
+    """ This finds the control surface distribution, χ (chi). """
+    chi = np.zeros_like(z)
+    return chi
+
+def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT):
+    # Find chord at aileron root and tip
+    cr = chord_distribution(planform, RA, RT, zr, np.pi)
+    ct = chord_distribution(planform, RA, RT, zt, np.pi)
+    # Find hinge-line positions
+    yr = (cfpc_begin - 0.75)*cr
+    yt = (cfpc_end - 0.75)*ct
+    # Initialize array
+    cfpc = np.zeros_like(zpb, dtype=float)
+    # Loop through each spanwise node
+    for i in range(len(zpb)):
+        z = abs(zpb[i])
+        # Check whether node is within aileron
+        if zr <= z <= zt:
+            # Find hinge-line position at this node
+            y = yr + (yt-yr)*(z-zr)/(zt-zr)
+            # Calculate local flap fraction
+            cfpc[i] = y/cpb[i] + 0.75
+    return cfpc
+
+# def flap_effectiveness():
+#     """ This finds the flap effectiveness. """
+
+#     return eps_f,eps_fi
 
 def geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,RT,theta,Omega_value,
              washout_type, zpb, pi):
@@ -299,11 +338,6 @@ def washout_optimum_distribution(CLa_tilde,CLd,Omega_value,planform,RT,zpb):
 # ==========================================================================================
 #                                   CALCULATED RESULTS
 # ==========================================================================================
-
-def control_surface_distrubtion(z,zr,zt):
-    """ This finds the control surface distribution, χ (chi). """
-    if (z < -zt) or () or (z > zt):
-    return chi
 
 def cmatrix(c,cpb,CLa_tilde,N,theta):
     """ This is where the c-matrix is built. """

@@ -37,7 +37,7 @@
     "view": {
         "planform": false,
         "washout_distribution": false,
-        "aileron_distrobution": false,
+        "aileron_distribution": false,
         "induced_drag": false
     }
 }
