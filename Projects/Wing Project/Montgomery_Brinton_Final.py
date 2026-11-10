@@ -50,7 +50,7 @@ def main(pi):
     # Import JSON content from 'input.json'
     a,alo,CLa_tilde,nodes,planform,RA,RT,view_planform,view_washout_dist,view_idrag,\
         Omega_value,washout_type,CLd,view_aileron,zr,zt,cfpc_begin,cfpc_end,\
-            eta_h,delta_a = load_input_data()
+            eta_h,delta_a,pbar = load_input_data()
     # Create the number of nodes along the semispan
     total_nodes = node(nodes)
     # Preallocate arrays
@@ -64,9 +64,9 @@ def main(pi):
     = geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,total_nodes,omega_dist,Omega_opt,RA,RT\
                ,theta,Omega_value,washout_type,zpb,pi)
     # Calculate for aileron effects
-    aileron(an,bn,cfpc_begin,cfpc_end,cpb,dn,eta_h,planform,RA,RT,zpb,zr,zt)
+    chi,cn,Clda,Clpbar,Cl,pbar = aileron(an,bn,C,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,planform,RA,RT,zpb,zr,zt)
     # Print, output results
-    results(an,bn,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,theta,zpb)
+    results(an,bn,cn,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,pbar,theta,zpb)
     # Plot the planform
     PlotPlanform(cpb,greek,planform,view_planform,zpb)
     # Plot the washout distribution
@@ -96,7 +96,6 @@ def cov(total_nodes,pi):
     theta = np.linspace(0,pi,total_nodes)
     # Find the related z/b values
     zpb = -0.5 * np.cos(theta)
-    print(zpb)
     return theta, zpb
 
 # ==========================================================================================
@@ -176,28 +175,33 @@ def load_input_data():
     cfpc_begin = float(data["wing"]["aileron"]["begin[cf/c]"])
     cfpc_end = float(data["wing"]["aileron"]["end[cf/c]"])
     eta_h = float(data["wing"]["aileron"]["hinge_efficiency"])
-    delta_a = float(data["condition"]["aileron_deflection[deg]"])
-    pbar = data["condition"]["aileron_deflection[deg]"]
+    delta_a = float(np.deg2rad(data["condition"]["aileron_deflection[deg]"]))
+    pbar = data["condition"]["pbar"]
     if pbar != "steady":
-        pbar = float(np.deg2rad(pbar))
+        pbar = float(pbar)
     return a,alo,CLa_tilde,nodes,planform,RA,RT,view_planform, view_washout_dist,view_idrag,\
         Omega_value,washout_type,CLd,view_aileron,zr,zt,cfpc_begin,cfpc_end,eta_h,\
-        delta_a
+        delta_a,pbar
 
 # ==========================================================================================
 #                                    AIRFOIL FUNCTIONS
 # ==========================================================================================
 
-def aileron(an,bn,cfpc_begin,cfpc_end,cpb,dn,eta_h,planform,RA,RT,zpb,zr,zt):
+def aileron(an,bn,C,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,planform,RA,RT,zpb,zr,zt):
     """ This calculates for the aileron effects. """
     # Define the section flap deflection efficiency
     eta_d = 1.0
     # Find the chord flap fraction
     cfpc = flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT)
     # Find the local section flap effectiveness
-    eps_f = flap_effectiveness(cfpc,eta_h,eta_d)
+    eps_f,eps_fi = flap_effectiveness(cfpc,eta_h,eta_d)
     # Find the control surface distribution
-    # chi = control_surface_distrubtion(eps_f,zpb,zr,zt)
+    chi = control_surface_distrubtion(eps_f,zpb,zr,zt)
+    # Find the decomposed fourier 'c'
+    cn = fourier(None,C,None,None,None,chi=chi)
+    # Find the rolling coefficients
+    Clda,Clpbar,Cl,pbar = rolling(cn,delta_a,dn,pbar,RA)
+    return chi,cn,Clda,Clpbar,Cl,pbar
     
 def chord_distribution(planform,RA,RT,zpb,pi):
     """Calculate the normalized chord distribution."""
@@ -213,7 +217,20 @@ def chord_distribution(planform,RA,RT,zpb,pi):
 
 def control_surface_distrubtion(eps_f,z,zr,zt):
     """ This finds the control surface distribution, χ (chi). """
-    chi = np.zeros_like(z)
+    # Allocate space for chi
+    chi = np.zeros_like(z,dtype=float)
+    # Loop through each node in the piecewise function
+    for i in range(len(z)):
+        # Left aileron wing
+        if zr <= z[i] <= zt:
+            chi[i] = -eps_f[i]
+        # Right aileron wing
+        elif -zt <= z[i] <= -zr:
+            chi[i] = eps_f[i]
+        # Not within aileron range
+        else:
+            chi[i] = 0.0
+    # print(chi)
     return chi
 
 def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT):
@@ -241,7 +258,9 @@ def flap_effectiveness(cfpc,eta_h,eta_d):
     # Find the change in variables
     theta_f = np.acos(2.0*cfpc - 1.0)
     # Find the ideal section flap effectiveness
-    eps_fi = 1 - ((theta_f - np.sin(theta_f))/pi)
+    eps_fi = 1.0 - ((theta_f - np.sin(theta_f))/pi)
+    # Find the actual section flap effectiveness
+    eps_f = eta_h*eta_d*eps_fi
     return eps_f,eps_fi
 
 def geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,RT,theta,Omega_value,
@@ -253,7 +272,7 @@ def geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,RT,
     C = cmatrix(C, cpb, CLa_tilde, N, theta)
     Cinv = cmatrix_inverse(C, Cinv)
     # Calculate Fourier coefficients
-    an,bn,dn = fourier(B,C,omega_dist,theta,washout_type)
+    an,bn,dn = fourier(B,C,omega_dist,theta,washout_type,chi=None)
     # First Fourier coefficients
     a1 = an[0]
     b1 = bn[0] if bn is not None else None
@@ -284,6 +303,24 @@ def geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,RT,
         case _:
             raise ValueError(f"Unknown washout type: {washout_type}")
     return (an,bn,C,Cinv,cpb,CL,CLa,CDi,dn,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist,Omega_opt)
+
+def rolling(cn,delta_a,dn,pbar,RA):
+    """ This finds everything related to rolling. """
+    # Find the specific decomposed fourier values
+    c2 = cn[1]
+    d2 = dn[1]
+    # Find the change in rolling moment coefficient with respect to aileron deflection
+    Clda = -0.25*pi*RA*c2
+    # Find the rolling moment coefficient with respect to dimensionless rolling rate
+    Clpbar = -0.25*pi*RA*d2
+    # Define steady pbar if present
+    if pbar == 'steady':
+        pbar = (-Clda*delta_a)/(Clpbar)
+        Cl = 0.0
+    else:
+        # Find the rolling moment coefficient
+        Cl = (Clda*delta_a) + (Clpbar*pbar)
+    return Clda,Clpbar,Cl,pbar
 
 def washout(CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb):
     """ This is where washout is calculated. """
@@ -400,8 +437,12 @@ def factors(an, a1, bn, b1, CLa_tilde, planform, RA):
             kDOmega += n*difference**2
     return (eps_Omega, kL, kD, kDL, kDOmega, es)
 
-def fourier(B,C,omega_dist,theta,washout_type):
+def fourier(B,C,omega_dist,theta,washout_type,chi=None):
     """ This is where the fourier series coefficients are found. """
+    # Find the c-values if chi is present
+    if chi is not None:
+        cn = np.linalg.solve(C, chi)
+        return cn
     # Solve the Fourier Series
     an = np.linalg.solve(C,B)
     match washout_type:
@@ -422,7 +463,7 @@ def preallocate(N):
     B = np.ones(N)
     return B, C, Cinv
     
-def results(an,bn,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,theta,zpb):
+def results(an,bn,cn,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,pbar,theta,zpb):
     """ This is where the final results are found. """
     # ========= Write out to a txt file =========
     script_dir = Path(__file__).parent
@@ -439,6 +480,8 @@ def results(an,bn,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,kDOmega,kL,
         np.savetxt(f, bn, fmt="%18.12f")
     else:
         f.write("No washout applied.\n")
+    f.write("\n========== FOURIER SERIES, cn ========\n")
+    np.savetxt(f, cn, fmt="%18.12f")
     f.write("\n========== FOURIER SERIES, dn ========\n")
     np.savetxt(f, dn, fmt="%18.12f")
     f.close()
@@ -447,15 +490,21 @@ def results(an,bn,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,kDOmega,kL,
     print("==============================================")
     print("            AERODYNAMIC PROPERTIES")
     print("==============================================")
-    print(f"{greek['kappa']['lower']}L    ={kL:18.12f}")
-    print(f"{greek['kappa']['lower']}D    ={kD:18.12f}")
-    print(f"es    ={es:18.12f}")
-    print(f"CL{greek['alpha']['lower']}   ={CLa:18.12f}")
-    print(f"{greek['epsilon']['lower']}{greek['omega']['upper']}    ={eps_Omega:18.12f}")
-    print(f"{greek['kappa']['lower']}DL   ={kDL:18.12f}")
-    print(f"{greek['kappa']['lower']}D{greek['omega']['upper']}   ={kDOmega:18.12f}")
-    print(f"CL    ={CL:18.12f}")
-    print(f"CDi   ={CDi:18.12f}")
+    print(f"{greek['kappa']['lower']}L          ={kL:18.12f}")
+    print(f"{greek['kappa']['lower']}D          ={kD:18.12f}")
+    print(f"es          ={es:18.12f}")
+    print(f"CL,{greek['alpha']['lower']}        ={CLa:18.12f}")
+    print(f"{greek['epsilon']['lower']}{greek['omega']['upper']}          ={eps_Omega:18.12f}")
+    print(f"{greek['kappa']['lower']}DL         ={kDL:18.12f}")
+    print(f"{greek['kappa']['lower']}D{greek['omega']['upper']}         ={kDOmega:18.12f}")
+    print(f"Cl,{greek['delta']['lower']}a       ={Clda:18.12f}")
+    print(f"Cl,pbar     ={Clpbar:18.12f}")
+    print(f"Steady pbar ={pbar:18.12f}")
+    print(f"CL          ={CL:18.12f}")
+    print(f"CDi         ={CDi:18.12f}")
+    print(f"CDl         =")
+    print(f"Cl          ={Cl:18.12f}")
+    print(f"Cn          = ")
     print("==============================================\n")
 
 # ==========================================================================================

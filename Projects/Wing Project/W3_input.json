@@ -10,11 +10,11 @@
         "airfoil_lift_slope": 6.283185307179590,
         "nodes_per_semispan": 4,
         "washout": {
-            "distribution": "optimum",
+            "distribution": "linear",
             "distribution_options": [["none: no twist"],
                                      ["linear: linear twist distribution"],
                                      ["optimum: optimum twist distribution"]],
-            "amount[deg]": "optimum",
+            "amount[deg]": 5.0,
             "amount_options": [["value: real number in degrees"],
                                ["optimum: requres CL_design"]],
             "CL_design": 0.8
@@ -37,7 +37,7 @@
     "view": {
         "planform": false,
         "washout_distribution": false,
-        "aileron_distribution": false,
+        "aileron_distribution": true,
         "induced_drag": false
     }
 }
