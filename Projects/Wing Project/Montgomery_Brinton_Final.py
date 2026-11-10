@@ -64,9 +64,11 @@ def main(pi):
     = geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,total_nodes,omega_dist,Omega_opt,RA,RT\
                ,theta,Omega_value,washout_type,zpb,pi)
     # Calculate for aileron effects
-    chi,cn,Clda,Clpbar,Cl,pbar = aileron(an,bn,C,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,planform,RA,RT,zpb,zr,zt)
+    chi,cn,Clda,Clpbar,Cl,pbar = aileron(a,an,alo,bn,C,cfpc_begin,cfpc_end,cpb,delta_a,dn,\
+                                         eta_h,pbar,Omega_opt,planform,RA,RT,zpb,zr,zt)
     # Print, output results
-    results(an,bn,cn,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,pbar,theta,zpb)
+    results(an,bn,cn,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,\
+            kDOmega,kL,omega_dist,pbar,theta,zpb)
     # Plot the planform
     PlotPlanform(cpb,greek,planform,view_planform,zpb)
     # Plot the washout distribution
@@ -187,7 +189,7 @@ def load_input_data():
 #                                    AIRFOIL FUNCTIONS
 # ==========================================================================================
 
-def aileron(an,bn,C,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,planform,RA,RT,zpb,zr,zt):
+def aileron(a,an,al0,bn,C,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,Omega,planform,RA,RT,zpb,zr,zt):
     """ This calculates for the aileron effects. """
     # Define the section flap deflection efficiency
     eta_d = 1.0
@@ -200,7 +202,8 @@ def aileron(an,bn,C,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,planform,RA,RT
     # Find the decomposed fourier 'c'
     cn = fourier(None,C,None,None,None,chi=chi)
     # Find the rolling coefficients
-    Clda,Clpbar,Cl,pbar = rolling(cn,delta_a,dn,pbar,RA)
+    An,Clda,Clpbar,Cl,pbar = rolling(a,al0,an,bn,cn,delta_a,dn,Omega,pbar,RA)
+    print(An)
     return chi,cn,Clda,Clpbar,Cl,pbar
     
 def chord_distribution(planform,RA,RT,zpb,pi):
@@ -304,7 +307,7 @@ def geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,RT,
             raise ValueError(f"Unknown washout type: {washout_type}")
     return (an,bn,C,Cinv,cpb,CL,CLa,CDi,dn,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist,Omega_opt)
 
-def rolling(cn,delta_a,dn,pbar,RA):
+def rolling(a,al0,an,bn,cn,delta_a,dn,Omega,pbar,RA):
     """ This finds everything related to rolling. """
     # Find the specific decomposed fourier values
     c2 = cn[1]
@@ -320,7 +323,9 @@ def rolling(cn,delta_a,dn,pbar,RA):
     else:
         # Find the rolling moment coefficient
         Cl = (Clda*delta_a) + (Clpbar*pbar)
-    return Clda,Clpbar,Cl,pbar
+    # Find the Fourier Coefficient An
+    An = (an*(a-al0)) - (bn*Omega) + (cn*delta_a) + (dn*pbar)
+    return An,Clda,Clpbar,Cl,pbar
 
 def washout(CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb):
     """ This is where washout is calculated. """
