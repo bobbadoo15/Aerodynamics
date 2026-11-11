@@ -35,9 +35,6 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
-import sys
-import os
-# from scipy.interpolate import interp1d
 
 # ==========================================================================================
 #                                          MAIN
@@ -64,19 +61,19 @@ def main(pi):
     = geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,total_nodes,omega_dist,Omega_opt,RA,RT\
                ,theta,Omega_value,washout_type,zpb,pi)
     # Calculate for aileron effects
-    chi,cn,Clda,Clpbar,Cl,pbar = aileron(a,an,alo,bn,C,cfpc_begin,cfpc_end,cpb,delta_a,dn,\
-                                         eta_h,pbar,Omega_opt,planform,RA,RT,zpb,zr,zt)
+    cr,ct,cfpc,chi,cn,CDI,Clda,Clpbar,Cl,Cn,pbar,yr,yt = aileron(a,an,alo,bn,C,CL,cfpc_begin,cfpc_end,cpb,delta_a,dn,\
+                                         eta_h,pbar,Omega_opt,planform,RA,RT,total_nodes,zpb,zr,zt)
     # Print, output results
-    results(an,bn,cn,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,\
+    results(an,bn,cn,CDI,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,Cn,CLa,dn,eps_Omega,es,greek,kD,kDL,\
             kDOmega,kL,omega_dist,pbar,theta,zpb)
     # Plot the planform
-    PlotPlanform(cpb,greek,planform,view_planform,zpb)
+    PlotPlanform(cr,ct,cfpc_begin,cfpc_end,cfpc,cpb,greek,planform,view_aileron,view_planform,yr,yt,zpb,zr,zt)
     # Plot the washout distribution
     PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb)
     # Plot the CDi
     PlotCDi(alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega_opt,planform,RA,view_idrag,washout_type)
-    # Plot ailerons
-    PlotAilerons()
+    # plot the aileron distribuiton
+    PlotAileron(chi,greek,planform,view_aileron,zpb)
 
 # ==========================================================================================
 #                                       NODAL COUNT
@@ -138,7 +135,7 @@ def load_input_data():
     """ This imports all content from the 'input.json' file. """
     # Define the input path
     script_dir = Path(__file__).parent
-    input_path = script_dir/"W3_input.json"
+    input_path = script_dir/"input.json"
     # Open and load JSON file
     with open(input_path, 'r') as file:
         data = json.load(file)
@@ -160,8 +157,8 @@ def load_input_data():
     # Load viewing options
     view_planform = data["view"]["planform"]
     view_washout_dist = data["view"]["washout_distribution"]
-    view_idrag = data["view"]["induced_drag"]
     view_aileron = data["view"]["aileron_distribution"]
+    view_idrag = data["view"].get("induced_drag", False)
     # Load washout amount
     Omega_value = data["wing"]["washout"]["amount[deg]"]
     # Convert to radians unless calculating optimum washout
@@ -189,12 +186,12 @@ def load_input_data():
 #                                    AIRFOIL FUNCTIONS
 # ==========================================================================================
 
-def aileron(a,an,al0,bn,C,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,Omega,planform,RA,RT,zpb,zr,zt):
+def aileron(a,an,al0,bn,C,CL,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,Omega,planform,RA,RT,N,zpb,zr,zt):
     """ This calculates for the aileron effects. """
     # Define the section flap deflection efficiency
     eta_d = 1.0
     # Find the chord flap fraction
-    cfpc = flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT)
+    cfpc,cr,ct,yr,yt = flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT)
     # Find the local section flap effectiveness
     eps_f,eps_fi = flap_effectiveness(cfpc,eta_h,eta_d)
     # Find the control surface distribution
@@ -203,8 +200,19 @@ def aileron(a,an,al0,bn,C,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,Omega,pl
     cn = fourier(None,C,None,None,None,chi=chi)
     # Find the rolling coefficients
     An,Clda,Clpbar,Cl,pbar = rolling(a,al0,an,bn,cn,delta_a,dn,Omega,pbar,RA)
-    print(An)
-    return chi,cn,Clda,Clpbar,Cl,pbar
+    # Find the induced drag due to aileron effects
+    A2 = An[1]
+    A3 = An[2]
+    CDI_sum = 0.0
+    for i in range(N):
+        CDI_sum += (i+1) * An[i]**2
+    CDI = (pi*RA*CDI_sum) - (0.5*pi*RA*pbar*A2)
+    # Find the yawing moment coefficient for a general planform and twist
+    Cn_sum = 0.0
+    for i in range(4,N+1):
+        Cn_sum += (2*i-1) * An[i-2]*An[i-1]
+    Cn = ((CL*((6*A2)-pbar))/8) + ((pi*RA)*A3*((10*A2)-pbar)/8) + ((pi*RA/4)*Cn_sum)
+    return cr,ct,cfpc,chi,cn,CDI,Clda,Clpbar,Cl,Cn,pbar,yr,yt
     
 def chord_distribution(planform,RA,RT,zpb,pi):
     """Calculate the normalized chord distribution."""
@@ -254,7 +262,7 @@ def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT):
             y = yr + (yt-yr)*(z-zr)/(zt-zr)
             # Calculate local flap fraction
             cfpc[i] = y/cpb[i] + 0.75
-    return cfpc
+    return cfpc,cr,ct,yr,yt
 
 def flap_effectiveness(cfpc,eta_h,eta_d):
     """ This finds the flap effectiveness. """
@@ -468,7 +476,7 @@ def preallocate(N):
     B = np.ones(N)
     return B, C, Cinv
     
-def results(an,bn,cn,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,pbar,theta,zpb):
+def results(an,bn,cn,CDI,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,Cn,CLa,dn,eps_Omega,es,greek,kD,kDL,kDOmega,kL,omega_dist,pbar,theta,zpb):
     """ This is where the final results are found. """
     # ========= Write out to a txt file =========
     script_dir = Path(__file__).parent
@@ -495,30 +503,67 @@ def results(an,bn,cn,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,CLa,dn,eps_Omega,es,greek,
     print("==============================================")
     print("            AERODYNAMIC PROPERTIES")
     print("==============================================")
-    print(f"{greek['kappa']['lower']}L          ={kL:18.12f}")
-    print(f"{greek['kappa']['lower']}D          ={kD:18.12f}")
-    print(f"es          ={es:18.12f}")
-    print(f"CL,{greek['alpha']['lower']}        ={CLa:18.12f}")
-    print(f"{greek['epsilon']['lower']}{greek['omega']['upper']}          ={eps_Omega:18.12f}")
-    print(f"{greek['kappa']['lower']}DL         ={kDL:18.12f}")
-    print(f"{greek['kappa']['lower']}D{greek['omega']['upper']}         ={kDOmega:18.12f}")
-    print(f"Cl,{greek['delta']['lower']}a       ={Clda:18.12f}")
-    print(f"Cl,pbar     ={Clpbar:18.12f}")
-    print(f"Steady pbar ={pbar:18.12f}")
-    print(f"CL          ={CL:18.12f}")
-    print(f"CDi         ={CDi:18.12f}")
-    print(f"CDl         =")
-    print(f"Cl          ={Cl:18.12f}")
-    print(f"Cn          = ")
+    print(f"{greek['kappa']['lower']}L      ={kL:18.12f}")
+    print(f"{greek['kappa']['lower']}D      ={kD:18.12f}")
+    print(f"es      ={es:18.12f}")
+    print(f"CL,{greek['alpha']['lower']}    ={CLa:18.12f}")
+    print(f"{greek['epsilon']['lower']}{greek['omega']['upper']}      ={eps_Omega:18.12f}")
+    print(f"{greek['kappa']['lower']}DL     ={kDL:18.12f}")
+    print(f"{greek['kappa']['lower']}D{greek['omega']['upper']}     ={kDOmega:18.12f}")
+    print(f"Cl,{greek['delta']['lower']}a   ={Clda:18.12f}")
+    print(f"Cl,pbar ={Clpbar:18.12f}")
+    print(f"pbar    ={pbar:18.12f}")
+    print(f"CL      ={CL:18.12f}")
+    print(f"CDi     ={CDi:18.12f}")
+    print(f"CDI     ={CDI:18.12f}")
+    print(f"Cl      ={Cl:18.12f}")
+    print(f"Cn      ={Cn:18.12f}")
     print("==============================================\n")
 
 # ==========================================================================================
 #                                        PLOTTING
 # ==========================================================================================
 
-def PlotAilerons():
-    """ This plots the aileron effects. """
-    pass
+def PlotAileron(chi,greek,planform,view_aileron,z):
+    """ This plots the aileron distribution. """
+    if view_aileron == True:
+        # Create the font family for the plot
+        plt.rcParams.update({
+            "font.family": "serif",
+            "font.serif": ["Times New Roman"],
+            "mathtext.fontset": "stix",
+            "font.size": 12,
+            "axes.titlesize": 16,
+            "axes.labelsize": 14,
+        })
+        # Create figure
+        fig, ax = plt.subplots()
+        # Create plot information
+        ax.set_title(f"{planform.capitalize()} Planform Aileron Distribution",
+                fontsize=16,
+                fontfamily="serif",
+                fontweight="bold")
+        ax.set_xlabel(r"$\mathbfit{z/b}$", fontsize=14)
+        ax.set_ylabel(rf"$\mathbfit{{{greek['chi']['lower']}}} (z/b)$", fontsize=14)        
+        ax.set_aspect("equal")
+        ax.grid(False)
+        # Format plot borders
+        for spine in ax.spines.values():
+            spine.set_linewidth(1.5)
+        # Format ticks
+        ax.tick_params(axis="both",
+                    which="major",
+                    width=1.5,
+                    length=6,
+                    direction="out")
+        # Format tick labels
+        for label in ax.get_xticklabels() + ax.get_yticklabels():
+            label.set_fontweight("bold")
+        # Plot the distribution
+        ax.plot(z,chi,color="black",linewidth=0.75)
+        plt.show()
+    else:
+        print("Displaying aileron distribution view is disabled.")
 
 def PlotCDi(alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega,planform,RA,view_idrag,washout_type):
     """ Plot CDi vs CL for no twist and linear twist. """
@@ -598,7 +643,7 @@ def PlotCDi(alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega,planform,RA,view_idrag,washou
     else:
         print("Displaying CDi view is disabled.")
 
-def PlotPlanform(cpb,greek,planform,view_planform,zpb):
+def PlotPlanform(cr,ct,cfpc_begin,cfpc_end,cfpc,cpb,greek,planform,view_aileron,view_planform,yr,yt,zpb,zr,zt):
     """ This displays the desired lifitng-line for a given wingspan. """
     if view_planform == True:
         # Define the LE and TE
@@ -638,18 +683,46 @@ def PlotPlanform(cpb,greek,planform,view_planform,zpb):
             label.set_fontweight("bold")
         # Plot vertical chord lines
         ax.vlines(zpb, TE, LE, color="blue", linewidth=0.75)
+        # Plot ailerons if they exist
+        if view_aileron == True:
+            # Find the TE positions for the relative cf/c
+            TEr = -0.75*cr
+            TEt = -0.75*ct
+            # Find nodes within the ailerons
+            mask = (np.abs(zpb) >= zr) & (np.abs(zpb) <= zt)
+            # Find hinge-line positions at the nodes
+            hinge = TE + cfpc*cpb
+            # Plot red flap chord lines
+            ax.vlines(zpb[mask], TE[mask], hinge[mask],
+                    color="red", linewidth=0.75)
+            # Plot right aileron
+            ax.plot([zr, zt], [yr, yt], color="black", linewidth=1.5)
+            ax.vlines([zr, zt], [TEr, TEt], [yr, yt],
+                    color="black", linewidth=1.5)
+            # Plot left aileron
+            ax.plot([-zt, -zr], [yt, yr], color="black", linewidth=1.5)
+            ax.vlines([-zt, -zr], [TEt, TEr], [yt, yr],
+                    color="black", linewidth=1.5)
+            # Shade aileron regions
+            # ax.fill([zr, zt, zt, zr],
+            #         [yr, yt, TEt, TEr],
+            #         color="orange", alpha=0.4)
+            # ax.fill([-zt, -zr, -zr, -zt],
+            #         [yt, yr, TEr, TEt],
+            #         color="orange", alpha=0.4)
+        else:
+            print("Displaying ailerons is disabled.")
         # Plot the LE and TE
-        ax.plot(zpb, LE, color="black", linewidth=0.75)
-        ax.plot(zpb, TE, color="black", linewidth=0.75)
+        ax.plot(zpb, LE, color="black", linewidth=1.5)
+        ax.plot(zpb, TE, color="black", linewidth=1.5)
         # Plot the tapered edges
         if planform == "tapered":
             # Plot the left wingtip
-            ax.vlines(zpb[0], TE[0], LE[0], color="black", linewidth=0.75)
+            ax.vlines(zpb[0], TE[0], LE[0], color="black", linewidth=1.5)
             # Plot the right wingtip
-            ax.vlines(zpb[-1], TE[-1], LE[-1], color="black", linewidth=0.75)
+            ax.vlines(zpb[-1], TE[-1], LE[-1], color="black", linewidth=1.5)
         # Plot quarter chord line
-        ax.plot(zpb, np.zeros_like(zpb), color="black", linestyle="--", linewidth=0.75)
-
+        ax.plot(zpb, np.zeros_like(zpb), color="black", linestyle="--", linewidth=1.0)
         plt.show()
     else:
         print("Displaying planform view is disabled.")
@@ -686,7 +759,7 @@ def PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb):
                         fontfamily="serif",
                         fontweight="bold")
         ax.set_xlabel(r"$\mathbfit{z/b}$", fontsize=14)
-        ax.set_ylabel(rf"$\mathbfit{{{greek['omega']['lower']}({greek['theta']['lower']})}}$", fontsize=14)        
+        ax.set_ylabel(rf"$\mathbfit{{{greek['omega']['lower']}}} (z/b)$", fontsize=14)        
         ax.set_aspect("equal")
         ax.grid(False)
         # Format plot borders
