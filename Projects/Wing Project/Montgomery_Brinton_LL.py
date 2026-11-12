@@ -47,22 +47,27 @@ def main(pi):
     # Import JSON content from 'input.json'
     a,alo,CLa_tilde,nodes,planform,RA,RT,view_planform,view_washout_dist,view_idrag,\
         Omega_value,washout_type,CLd,view_aileron,zr,zt,cfpc_begin,cfpc_end,\
-            eta_h,delta_a,pbar = load_input_data()
+            eta_h,delta_a,pbar,planform_file = load_input_data()
     # Create the number of nodes along the semispan
     total_nodes = node(nodes)
-    # Preallocate arrays
-    B,C,Cinv = preallocate(total_nodes)
     # Calculate for the theta values
     theta,zpb = cov(total_nodes,pi)
+    # Determine the cpb
+    if planform_file is not None:
+        cpb = import_planform(planform_file,zpb)
+    else:
+        cpb = chord_distribution(planform,RA,RT,zpb,pi)
+    # Preallocate arrays
+    B,C,Cinv = preallocate(total_nodes)
     # Define the Washout of the wing
     omega_dist,Omega_opt = washout(CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb)
     # Define the shape of the wing
     an,bn,C,Cinv,cpb,CL,CLa,CDi,dn,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist,Omega_opt\
-    = geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,total_nodes,omega_dist,Omega_opt,RA,RT\
+    = geometry(a,alo,B,cpb,CLa_tilde,CLd,C,Cinv,planform,total_nodes,omega_dist,Omega_opt,RA,RT\
                ,theta,Omega_value,washout_type,zpb,pi)
     # Calculate for aileron effects
     cr,ct,cfpc,chi,cn,CDI,Clda,Clpbar,Cl,Cn,pbar,yr,yt = aileron(a,an,alo,bn,C,CL,cfpc_begin,cfpc_end,cpb,delta_a,dn,\
-                                         eta_h,pbar,Omega_opt,planform,RA,RT,total_nodes,zpb,zr,zt)
+                                         eta_h,pbar,Omega_opt,planform,planform_file,RA,RT,total_nodes,zpb,zr,zt)
     # Print, output results
     results(an,bn,cn,CDI,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,Cn,CLa,dn,eps_Omega,es,greek,kD,kDL,\
             kDOmega,kL,omega_dist,pbar,theta,zpb)
@@ -131,6 +136,16 @@ def Greek():
 }
     return greek
 
+def import_planform(planform_file, zpb):
+    """Import and interpolate the chord distribution."""
+    script_dir = Path(__file__).parent
+    file_path = script_dir / planform_file
+    data = np.loadtxt(file_path, skiprows=1)
+    zpb_input = data[:, 0]
+    cpb_input = data[:, 1]
+    cpb = np.interp(np.abs(zpb), zpb_input, cpb_input)
+    return cpb
+
 def load_input_data():
     """ This imports all content from the 'input.json' file. """
     # Define the input path
@@ -178,20 +193,22 @@ def load_input_data():
     pbar = data["condition"]["pbar"]
     if pbar != "steady":
         pbar = float(pbar)
+    # Import planform text file if present in JSON input
+    planform_file = data["wing"]["planform"].get("filename", None)
     return a,alo,CLa_tilde,nodes,planform,RA,RT,view_planform, view_washout_dist,view_idrag,\
         Omega_value,washout_type,CLd,view_aileron,zr,zt,cfpc_begin,cfpc_end,eta_h,\
-        delta_a,pbar
+        delta_a,pbar,planform_file
 
 # ==========================================================================================
 #                                    AIRFOIL FUNCTIONS
 # ==========================================================================================
 
-def aileron(a,an,al0,bn,C,CL,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,Omega,planform,RA,RT,N,zpb,zr,zt):
+def aileron(a,an,al0,bn,C,CL,cfpc_begin,cfpc_end,cpb,delta_a,dn,eta_h,pbar,Omega,planform,planform_file,RA,RT,N,zpb,zr,zt):
     """ This calculates for the aileron effects. """
     # Define the section flap deflection efficiency
     eta_d = 1.0
     # Find the chord flap fraction
-    cfpc,cr,ct,yr,yt = flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT)
+    cfpc,cr,ct,yr,yt = flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,planform_file,RA,RT)
     # Find the local section flap effectiveness
     eps_f,eps_fi = flap_effectiveness(cfpc,eta_h,eta_d)
     # Find the control surface distribution
@@ -244,10 +261,14 @@ def control_surface_distrubtion(eps_f,z,zr,zt):
     # print(chi)
     return chi
 
-def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,RA,RT):
-    # Find chord at aileron root and tip
-    cr = chord_distribution(planform, RA, RT, zr, pi)
-    ct = chord_distribution(planform, RA, RT, zt, pi)
+def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,planform_file,RA,RT):
+    if planform_file is not None:
+        data = np.loadtxt(Path(__file__).parent / planform_file, skiprows=1)
+        cr = np.interp(zr, data[:, 0], data[:, 1])
+        ct = np.interp(zt, data[:, 0], data[:, 1])
+    else:
+        cr = chord_distribution(planform, RA, RT, zr, pi)
+        ct = chord_distribution(planform, RA, RT, zt, pi)
     # Find hinge-line positions
     yr = (cfpc_begin - 0.75)*cr
     yt = (cfpc_end - 0.75)*ct
@@ -274,11 +295,9 @@ def flap_effectiveness(cfpc,eta_h,eta_d):
     eps_f = eta_h*eta_d*eps_fi
     return eps_f,eps_fi
 
-def geometry(a,alo,B,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,RT,theta,Omega_value,
+def geometry(a,alo,B,cpb,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,RT,theta,Omega_value,
              washout_type, zpb, pi):
     """Calculate aerodynamic properties of the wing."""
-    # Calculate chord distribution
-    cpb = chord_distribution(planform, RA, RT, zpb, pi)
     # Build C-matrix and its inverse
     C = cmatrix(C, cpb, CLa_tilde, N, theta)
     Cinv = cmatrix_inverse(C, Cinv)

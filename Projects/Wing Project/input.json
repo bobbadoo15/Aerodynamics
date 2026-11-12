@@ -7,7 +7,7 @@
                             ["file: (requires filename)"]],
           "aspect_ratio" : 8.0,
           "taper_ratio" : 0.5,
-          "filename" : "planform.txt"
+          "filename" : null
         },
         "airfoil_lift_slope" : 6.283185307179590,
         "nodes_per_semispan" : 50,
@@ -30,7 +30,7 @@
         }
     },
     "condition" : {
-        "alpha_root[deg]" : "CL",
+        "alpha_root[deg]" : 5.0,
         "alpha_options" : [["value: real number in degrees"],
                            ["CL: requires CL"]],
         "CL" : 0.5,
