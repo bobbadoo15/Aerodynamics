@@ -53,18 +53,23 @@ def main(pi):
     # Calculate for the theta values
     theta,zpb = cov(total_nodes,pi)
     # Determine the cpb
-    if planform_file is not None:
-        cpb = import_planform(planform_file,zpb)
-    else:
-        cpb = chord_distribution(planform,RA,RT,zpb,pi)
+    croot = None
+    match planform:
+        case "file":
+            cpb,croot,RA = import_planform(planform_file,zpb)
+            print(RA)
+        case "elliptic" | "tapered":
+            cpb = chord_distribution(planform,RA,RT,zpb,pi)
+        case _:
+            raise ValueError(f"Unknown planform type: {planform}")
     # Preallocate arrays
     B,C,Cinv = preallocate(total_nodes)
     # Define the Washout of the wing
-    omega_dist,Omega_opt = washout(CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb)
+    omega_dist,Omega_opt = washout(cpb,CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb,croot)
     # Define the shape of the wing
     an,bn,C,Cinv,cpb,CL,CLa,CDi,dn,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist,Omega_opt\
-    = geometry(a,alo,B,cpb,CLa_tilde,CLd,C,Cinv,planform,total_nodes,omega_dist,Omega_opt,RA,RT\
-               ,theta,Omega_value,washout_type,zpb,pi)
+    = geometry(a,alo,B,cpb,CLa_tilde,CLd,C,Cinv,planform,total_nodes,omega_dist,Omega_opt,RA\
+               ,theta,washout_type,pi)
     # Calculate for aileron effects
     cr,ct,cfpc,chi,cn,CDI,Clda,Clpbar,Cl,Cn,pbar,yr,yt = aileron(a,an,alo,bn,C,CL,cfpc_begin,cfpc_end,cpb,delta_a,dn,\
                                          eta_h,pbar,Omega_opt,planform,planform_file,RA,RT,total_nodes,zpb,zr,zt)
@@ -72,7 +77,7 @@ def main(pi):
     results(an,bn,cn,CDI,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,Cn,CLa,dn,eps_Omega,es,greek,kD,kDL,\
             kDOmega,kL,omega_dist,pbar,theta,zpb)
     # Plot the planform
-    PlotPlanform(cr,ct,cfpc_begin,cfpc_end,cfpc,cpb,greek,planform,view_aileron,view_planform,yr,yt,zpb,zr,zt)
+    PlotPlanform(cr,ct,cfpc,cpb,greek,planform,view_aileron,view_planform,yr,yt,zpb,zr,zt)
     # Plot the washout distribution
     PlotWashout(greek,omega_dist,view_washout_dist,washout_type,zpb)
     # Plot the CDi
@@ -136,15 +141,34 @@ def Greek():
 }
     return greek
 
-def import_planform(planform_file, zpb):
+def import_planform(planform_file,zpb):
     """Import and interpolate the chord distribution."""
+    # Find the file's path in the directory
     script_dir = Path(__file__).parent
     file_path = script_dir / planform_file
+    # Load the data without the headings
     data = np.loadtxt(file_path, skiprows=1)
-    zpb_input = data[:, 0]
-    cpb_input = data[:, 1]
+    # Define variables for each column
+    zpb_input = data[:,0]
+    cpb_input = data[:,1]
+    # Validate the imported data
+    if np.any(np.diff(zpb_input) <= 0):
+        raise ValueError("z/b values must be strictly increasing.")
+    if zpb_input[0] != 0 or zpb_input[-1] < 0.5:
+        raise ValueError("Planform must cover the entire semispan.")
+    if np.any(cpb_input < 0):
+        raise ValueError("Chord lengths cannot be negative.")
+    # Find the interpolated cpb values from node-defined zpb values
     cpb = np.interp(np.abs(zpb), zpb_input, cpb_input)
-    return cpb
+    # Find the average chord length
+    cavg = np.trapezoid(cpb,zpb)
+    # Find the related aspect ratio
+    RA = 1.0/ (cavg)
+    # Avoid a zero chord length
+    cpb = np.maximum(cpb, 0.001)
+    # Define the root of the chord
+    croot = cpb[np.isclose(zpb,0.0)][0]
+    return cpb,croot,RA
 
 def load_input_data():
     """ This imports all content from the 'input.json' file. """
@@ -166,9 +190,9 @@ def load_input_data():
     # Decide how the geometry should be directed
     planform = data["wing"]["planform"]["type"]
     # Find the aspect ratio
-    RA = float(data["wing"]["planform"]["aspect_ratio"])
+    RA = float(data["wing"]["planform"].get("aspect_ratio", 0.0))
     # Find the tapered ratio
-    RT = float(data["wing"]["planform"]["taper_ratio"])
+    RT = float(data["wing"]["planform"].get("taper_ratio", 0.0))
     # Load viewing options
     view_planform = data["view"]["planform"]
     view_washout_dist = data["view"]["washout_distribution"]
@@ -262,10 +286,10 @@ def control_surface_distrubtion(eps_f,z,zr,zt):
     return chi
 
 def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,planform_file,RA,RT):
-    if planform_file is not None:
+    if planform == "file":
         data = np.loadtxt(Path(__file__).parent / planform_file, skiprows=1)
-        cr = np.interp(zr, data[:, 0], data[:, 1])
-        ct = np.interp(zt, data[:, 0], data[:, 1])
+        cr = np.interp(zr, data[:,0], data[:,1])
+        ct = np.interp(zt, data[:,0], data[:,1])
     else:
         cr = chord_distribution(planform, RA, RT, zr, pi)
         ct = chord_distribution(planform, RA, RT, zt, pi)
@@ -274,6 +298,10 @@ def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,planform_file
     yt = (cfpc_end - 0.75)*ct
     # Initialize array
     cfpc = np.zeros_like(zpb, dtype=float)
+    # Checks if the hinge lines are withing the planform
+    mask = (np.abs(zpb) >= zr) & (np.abs(zpb) <= zt)
+    if np.any((cfpc[mask] < 0) | (cfpc[mask] > 1)):
+        raise ValueError("Aileron hinge line extends outside the wing.")
     # Loop through each spanwise node
     for i in range(len(zpb)):
         z = abs(zpb[i])
@@ -295,8 +323,8 @@ def flap_effectiveness(cfpc,eta_h,eta_d):
     eps_f = eta_h*eta_d*eps_fi
     return eps_f,eps_fi
 
-def geometry(a,alo,B,cpb,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,RT,theta,Omega_value,
-             washout_type, zpb, pi):
+def geometry(a,alo,B,cpb,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,theta,
+             washout_type,pi):
     """Calculate aerodynamic properties of the wing."""
     # Build C-matrix and its inverse
     C = cmatrix(C, cpb, CLa_tilde, N, theta)
@@ -307,13 +335,19 @@ def geometry(a,alo,B,cpb,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA
     a1 = an[0]
     b1 = bn[0] if bn is not None else None
     # Calculate aerodynamic factors
-    eps_Omega, kL, kD, kDL, kDOmega, es = factors(an, a1, bn, b1, CLa_tilde, planform, RA)
+    eps_Omega,kL,kD,kDL,kDOmega,es = factors(an,a1,bn,b1,CLa_tilde,planform,RA)
     # Calculate lift slope
     match planform:
         case "elliptic":
             CLa = CLa_tilde / (1 + CLa_tilde/(pi*RA))
-        case "tapered":
+        case "tapered" | "file":
             CLa = CLa_tilde / ((1 + CLa_tilde/(pi*RA))*(1+kL))
+            if planform == "file":
+                # Define the optimum washout for txt file
+                if washout_type == "optimum" and Omega_opt == "optimum":
+                    if np.isclose(kDOmega, 0.0):
+                        raise ValueError("Cannot optimize washout: kDOmega is zero.")
+                    Omega_opt = (kDL*CLd)/(2*kDOmega*CLa)
     # Calculate lift and induced drag
     match washout_type:
         case "none":
@@ -351,10 +385,12 @@ def rolling(a,al0,an,bn,cn,delta_a,dn,Omega,pbar,RA):
         # Find the rolling moment coefficient
         Cl = (Clda*delta_a) + (Clpbar*pbar)
     # Find the Fourier Coefficient An
-    An = (an*(a-al0)) - (bn*Omega) + (cn*delta_a) + (dn*pbar)
+    An = (an*(a-al0)) + (cn*delta_a) + (dn*pbar)
+    if bn is not None:
+        An -= bn*Omega
     return An,Clda,Clpbar,Cl,pbar
 
-def washout(CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb):
+def washout(cpb,CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb,croot):
     """ This is where washout is calculated. """
     match washout_type:
         case "none":
@@ -371,7 +407,7 @@ def washout(CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb):
                             Omega_opt = 0.0
                         case _:
                             raise ValueError(f"Unknown washout amount type: {Omega_value}")
-                case "tapered":
+                case "tapered" | "file":
                     match Omega_value:
                         case int() | float():
                             Omega_opt = Omega_value
@@ -382,12 +418,12 @@ def washout(CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb):
                 case _:
                     raise ValueError(f"Unknown planform type: {planform}")
         case "optimum":
-            omega_dist,Omega_opt = washout_optimum_distribution(CLa_tilde,CLd,Omega_value,planform,RT,zpb)
+            omega_dist,Omega_opt = washout_optimum_distribution(cpb,CLa_tilde,CLd,Omega_value,planform,RT,zpb,croot)
         case _:
             raise ValueError(f"Unknown washout type: {washout_type}")
     return omega_dist,Omega_opt
 
-def washout_optimum_distribution(CLa_tilde,CLd,Omega_value,planform,RT,zpb):
+def washout_optimum_distribution(cpb,CLa_tilde,CLd,Omega_value,planform,RT,zpb,croot):
     """ This finds the optimum washout distribution. """
     # Select the case for the wing planform
     match planform:
@@ -401,6 +437,15 @@ def washout_optimum_distribution(CLa_tilde,CLd,Omega_value,planform,RT,zpb):
                     Omega_opt = Omega_value
                 case "optimum":
                     Omega_opt = (2*(1+RT)*CLd) / (pi*CLa_tilde)
+                case _:
+                    raise ValueError(f"Unknown washout amount: {Omega_value}")
+        case "file":
+            omega_dist = 1 - np.sqrt(1-(2*zpb)**2)/(cpb/croot)
+            match Omega_value:
+                case int() | float():
+                    Omega_opt = Omega_value
+                case "optimum":
+                    Omega_opt = "optimum"
                 case _:
                     raise ValueError(f"Unknown washout amount: {Omega_value}")
         case _:
@@ -446,7 +491,7 @@ def factors(an, a1, bn, b1, CLa_tilde, planform, RA):
             kL = 0.0
             if bn is not None:
                 eps_Omega = b1/a1
-        case "tapered":
+        case "tapered" | "file":
             kL = (1 - (1 + (np.pi*RA)/CLa_tilde)*a1) / \
                  ((1 + (np.pi*RA)/CLa_tilde)*a1)
             if bn is not None:
@@ -662,7 +707,7 @@ def PlotCDi(alo,CLa,eps_Omega,kD,kDL,kDOmega,Omega,planform,RA,view_idrag,washou
     else:
         print("Displaying CDi view is disabled.")
 
-def PlotPlanform(cr,ct,cfpc_begin,cfpc_end,cfpc,cpb,greek,planform,view_aileron,view_planform,yr,yt,zpb,zr,zt):
+def PlotPlanform(cr,ct,cfpc,cpb,greek,planform,view_aileron,view_planform,yr,yt,zpb,zr,zt):
     """ This displays the desired lifitng-line for a given wingspan. """
     if view_planform == True:
         # Define the LE and TE
@@ -735,7 +780,7 @@ def PlotPlanform(cr,ct,cfpc_begin,cfpc_end,cfpc,cpb,greek,planform,view_aileron,
         ax.plot(zpb, LE, color="black", linewidth=1.5)
         ax.plot(zpb, TE, color="black", linewidth=1.5)
         # Plot the tapered edges
-        if planform == "tapered":
+        if planform == "tapered" or (planform == "file" and cpb[0] > 0):
             # Plot the left wingtip
             ax.vlines(zpb[0], TE[0], LE[0], color="black", linewidth=1.5)
             # Plot the right wingtip
