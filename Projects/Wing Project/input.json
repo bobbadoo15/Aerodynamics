@@ -40,7 +40,7 @@
                           ["steady: computes steady-state rolling rate"]]
     },
     "view" : {
-        "planform" : false,
+        "planform" : true,
         "washout_distribution" : false,
         "aileron_distribution" : false,
         "CL_hat_distributions" : false,

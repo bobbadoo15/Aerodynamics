@@ -57,7 +57,6 @@ def main(pi):
     match planform:
         case "file":
             cpb,croot,RA = import_planform(planform_file,zpb)
-            print(RA)
         case "elliptic" | "tapered":
             cpb = chord_distribution(planform,RA,RT,zpb,pi)
         case _:
@@ -161,7 +160,7 @@ def import_planform(planform_file,zpb):
     # Find the interpolated cpb values from node-defined zpb values
     cpb = np.interp(np.abs(zpb), zpb_input, cpb_input)
     # Find the average chord length
-    cavg = np.trapezoid(cpb,zpb)
+    cavg = np.trapezoid(cpb_input,zpb_input) * 2
     # Find the related aspect ratio
     RA = 1.0/ (cavg)
     # Avoid a zero chord length
