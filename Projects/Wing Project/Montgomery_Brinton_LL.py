@@ -7,24 +7,27 @@ can create a JSON file for a desired airfoil shape to use as the interested inpu
 Assumptions made for this project:
     * Thin Airfoil Theory: CLa = 2pi, al0 = 0
 
-GREEK UNICODE REFERENCE SHEET
-Usage: print("\u03B1") will print α
+GREEK UNICODE REFERENCE SHEET:
+    Usage: print("\u03B1") will print α
 
---- LOWERCASE LETTERS ---
-\u03B1 : α (alpha)      \u03B7 : η (eta)        \u03BD : ν (nu)         \u03C4 : τ (tau)
-\u03B2 : β (beta)       \u03B8 : θ (theta)      \u03BE : ξ (xi)         \u03C5 : υ (upsilon)
-\u03B3 : γ (gamma)      \u03B9 : ι (iota)       \u03BF : ο (omicron)    \u03C6 : φ (phi)
-\u03B4 : δ (delta)      \u03BA : κ (kappa)      \u03C0 : π (pi)         \u03C7 : χ (chi)
-\u03B5 : ε (epsilon)    \u03BB : λ (lambda)     \u03C1 : ρ (rho)        \u03C8 : ψ (psi)
-\u03B6 : ζ (zeta)       \u03BC : μ (mu)         \u03C3 : σ (sigma)      \u03C9 : ω (omega)
+    --- LOWERCASE LETTERS ---
+    \u03B1 : α (alpha)      \u03B7 : η (eta)        \u03BD : ν (nu)         \u03C4 : τ (tau)
+    \u03B2 : β (beta)       \u03B8 : θ (theta)      \u03BE : ξ (xi)         \u03C5 : υ (upsilon)
+    \u03B3 : γ (gamma)      \u03B9 : ι (iota)       \u03BF : ο (omicron)    \u03C6 : φ (phi)
+    \u03B4 : δ (delta)      \u03BA : κ (kappa)      \u03C0 : π (pi)         \u03C7 : χ (chi)
+    \u03B5 : ε (epsilon)    \u03BB : λ (lambda)     \u03C1 : ρ (rho)        \u03C8 : ψ (psi)
+    \u03B6 : ζ (zeta)       \u03BC : μ (mu)         \u03C3 : σ (sigma)      \u03C9 : ω (omega)
 
---- UPPERCASE LETTERS ---
-\u0391 : Α (Alpha)      \u0397 : Η (Eta)        \u039D : Ν (Nu)         \u03A4 : Τ (Tau)
-\u0392 : Β (Beta)       \u0398 : Θ (Theta)      \u039E : Ξ (Xi)         \u03A5 : Υ (Upsilon)
-\u0393 : Γ (Gamma)      \u0399 : Ι (Iota)       \u039F : Ο (Omicron)    \u03A6 : Φ (Phi)
-\u0394 : Δ (Delta)      \u039A : Κ (Kappa)      \u03A0 : Π (Pi)         \u03A7 : Χ (Chi)
-\u0395 : Ε (Epsilon)    \u039B : Λ (Lambda)     \u03A1 : Ρ (Rho)        \u03A8 : Ψ (Psi)
-\u0396 : Ζ (Zeta)       \u039C : Μ (Mu)         \u03A3 : Σ (Sigma)      \u03A9 : Ω (Omega)
+    --- UPPERCASE LETTERS ---
+    \u0391 : Α (Alpha)      \u0397 : Η (Eta)        \u039D : Ν (Nu)         \u03A4 : Τ (Tau)
+    \u0392 : Β (Beta)       \u0398 : Θ (Theta)      \u039E : Ξ (Xi)         \u03A5 : Υ (Upsilon)
+    \u0393 : Γ (Gamma)      \u0399 : Ι (Iota)       \u039F : Ο (Omicron)    \u03A6 : Φ (Phi)
+    \u0394 : Δ (Delta)      \u039A : Κ (Kappa)      \u03A0 : Π (Pi)         \u03A7 : Χ (Chi)
+    \u0395 : Ε (Epsilon)    \u039B : Λ (Lambda)     \u03A1 : Ρ (Rho)        \u03A8 : Ψ (Psi)
+    \u0396 : Ζ (Zeta)       \u039C : Μ (Mu)         \u03A3 : Σ (Sigma)      \u03A9 : Ω (Omega)
+
+OTHER UNICODE REFERENCES:
+    \u0304 : Bar over a letter
 '''
 
 # ==========================================================================================
@@ -585,21 +588,21 @@ def results(an,bn,cn,CDI,Cl,Clda,Clpbar,C,Cinv,cpb,CDi,CL,Cn,CLa,dn,eps_Omega,es
     print("==============================================")
     print("            AERODYNAMIC PROPERTIES")
     print("==============================================")
-    print(f"{greek['kappa']['lower']}L      ={kL:18.12f}")
-    print(f"{greek['kappa']['lower']}D      ={kD:18.12f}")
-    print(f"es      ={es:18.12f}")
-    print(f"CL,{greek['alpha']['lower']}    ={CLa:18.12f}")
-    print(f"{greek['epsilon']['lower']}{greek['omega']['upper']}      ={eps_Omega:18.12f}")
-    print(f"{greek['kappa']['lower']}DL     ={kDL:18.12f}")
-    print(f"{greek['kappa']['lower']}D{greek['omega']['upper']}     ={kDOmega:18.12f}")
-    print(f"Cl,{greek['delta']['lower']}a   ={Clda:18.12f}")
-    print(f"Cl,pbar ={Clpbar:18.12f}")
-    print(f"pbar    ={pbar:18.12f}")
-    print(f"CL      ={CL:18.12f}")
-    print(f"CDi     ={CDi:18.12f}")
-    print(f"CDI     ={CDI:18.12f}")
-    print(f"Cl      ={Cl:18.12f}")
-    print(f"Cn      ={Cn:18.12f}")
+    print(f"{greek['kappa']['lower']}L     ={kL:18.12f}")
+    print(f"CL,{greek['alpha']['lower']}   ={CLa:18.12f}")
+    print(f"{greek['epsilon']['lower']}{greek['omega']['upper']}     ={eps_Omega:18.12f}")
+    print(f"{greek['kappa']['lower']}D     ={kD:18.12f}")
+    print(f"{greek['kappa']['lower']}DL    ={kDL:18.12f}")
+    print(f"{greek['kappa']['lower']}D{greek['omega']['upper']}    ={kDOmega:18.12f}")
+    print(f"Cl,{greek['delta']['lower']}a  ={Clda:18.12f}")
+    print(f"Cl,p\u0304   ={Clpbar:18.12f}")
+    print(f"CL     ={CL:18.12f}")
+    # print(f"CDi     ={CDi:18.12f}") # Neglects aileron effects
+    print(f"CDi    ={CDI:18.12f}") # Includes aileron effects
+    print(f"Cl     ={Cl:18.12f}")
+    print(f"Cn     ={Cn:18.12f}")
+    print(f"p\u0304      ={pbar:18.12f}")
+    # print(f"es      ={es:18.12f}")
     print("==============================================\n")
 
 # ==========================================================================================
