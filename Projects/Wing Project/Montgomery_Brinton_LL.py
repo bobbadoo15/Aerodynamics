@@ -45,7 +45,7 @@ def main(pi):
     # Import Greek letters for displaying
     greek = Greek()
     # Import JSON content from 'input.json'
-    a,alo,CLa_tilde,nodes,planform,RA,RT,view_planform,view_washout_dist,view_idrag,\
+    a,alo,CL_input,CLa_tilde,nodes,planform,RA,RT,view_planform,view_washout_dist,view_idrag,\
         Omega_value,washout_type,CLd,view_aileron,zr,zt,cfpc_begin,cfpc_end,\
             eta_h,delta_a,pbar,planform_file = load_input_data()
     # Create the number of nodes along the semispan
@@ -66,8 +66,8 @@ def main(pi):
     # Define the Washout of the wing
     omega_dist,Omega_opt = washout(cpb,CLa_tilde,CLd,Omega_value,planform,RT,washout_type,zpb,croot)
     # Define the shape of the wing
-    an,bn,C,Cinv,cpb,CL,CLa,CDi,dn,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist,Omega_opt\
-    = geometry(a,alo,B,cpb,CLa_tilde,CLd,C,Cinv,planform,total_nodes,omega_dist,Omega_opt,RA\
+    a,an,bn,C,Cinv,cpb,CL,CLa,CDi,dn,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist,Omega_opt\
+    = geometry(a,alo,B,cpb,CL_input,CLa_tilde,CLd,C,Cinv,planform,total_nodes,omega_dist,Omega_opt,RA\
                ,theta,washout_type,pi)
     # Calculate for aileron effects
     cr,ct,cfpc,chi,cn,CDI,Clda,Clpbar,Cl,Cn,pbar,yr,yt = aileron(a,an,alo,bn,C,CL,cfpc_begin,cfpc_end,cpb,delta_a,dn,\
@@ -178,10 +178,18 @@ def load_input_data():
     with open(input_path, 'r') as file:
         data = json.load(file)
     # ====== Store data values ======
-    # Define alpha in radians
-    a = np.deg2rad(float(data["condition"]["alpha_root[deg]"]))
     # Define zero-lift alpha
     alo = 0.0 # ---> we are assuming 0 due to TAT, replace when told otherwise
+    # Define alpha in radians or specify CL
+    a = data["condition"]["alpha_root[deg]"]
+    match a:
+        case "CL":
+            CL_input = float(data["condition"]["CL"])
+        case int() | float():
+            a = float(np.deg2rad(a))
+            CL_input = None
+        case _:
+            raise ValueError(f"Unknown aoa condition: {a}")
     # Define section lift slope
     CLa_tilde = float(data["wing"]["airfoil_lift_slope"])
     # Import the total number of desired nodes
@@ -218,7 +226,7 @@ def load_input_data():
         pbar = float(pbar)
     # Import planform text file if present in JSON input
     planform_file = data["wing"]["planform"].get("filename", None)
-    return a,alo,CLa_tilde,nodes,planform,RA,RT,view_planform, view_washout_dist,view_idrag,\
+    return a,alo,CL_input,CLa_tilde,nodes,planform,RA,RT,view_planform, view_washout_dist,view_idrag,\
         Omega_value,washout_type,CLd,view_aileron,zr,zt,cfpc_begin,cfpc_end,eta_h,\
         delta_a,pbar,planform_file
 
@@ -285,6 +293,11 @@ def control_surface_distrubtion(eps_f,z,zr,zt):
     return chi
 
 def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,planform_file,RA,RT):
+    """ This is where the flap chord fractions are calculated. """
+    # Checking divide by zero
+    if not (0 <= zr < zt <= 0.5):
+        raise ValueError("Aileron boundaries must satisfy 0 <= zr < zt <= 0.5.")
+    # Finding related values if reading planform file
     if planform == "file":
         data = np.loadtxt(Path(__file__).parent / planform_file, skiprows=1)
         cr = np.interp(zr, data[:,0], data[:,1])
@@ -297,10 +310,6 @@ def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,planform_file
     yt = (cfpc_end - 0.75)*ct
     # Initialize array
     cfpc = np.zeros_like(zpb, dtype=float)
-    # Checks if the hinge lines are withing the planform
-    mask = (np.abs(zpb) >= zr) & (np.abs(zpb) <= zt)
-    if np.any((cfpc[mask] < 0) | (cfpc[mask] > 1)):
-        raise ValueError("Aileron hinge line extends outside the wing.")
     # Loop through each spanwise node
     for i in range(len(zpb)):
         z = abs(zpb[i])
@@ -310,6 +319,10 @@ def flap_chord_fraction(zpb,cpb,zr,zt,cfpc_begin,cfpc_end,planform,planform_file
             y = yr + (yt-yr)*(z-zr)/(zt-zr)
             # Calculate local flap fraction
             cfpc[i] = y/cpb[i] + 0.75
+    # Checks if the hinge lines are withing the planform
+    mask = (np.abs(zpb) >= zr) & (np.abs(zpb) <= zt)
+    if np.any((cfpc[mask] < 0) | (cfpc[mask] > 1)):
+        raise ValueError("Aileron hinge line extends outside the wing.")
     return cfpc,cr,ct,yr,yt
 
 def flap_effectiveness(cfpc,eta_h,eta_d):
@@ -322,7 +335,7 @@ def flap_effectiveness(cfpc,eta_h,eta_d):
     eps_f = eta_h*eta_d*eps_fi
     return eps_f,eps_fi
 
-def geometry(a,alo,B,cpb,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,theta,
+def geometry(a,alo,B,cpb,CL_input,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA,theta,
              washout_type,pi):
     """Calculate aerodynamic properties of the wing."""
     # Build C-matrix and its inverse
@@ -347,25 +360,31 @@ def geometry(a,alo,B,cpb,CLa_tilde,CLd,C,Cinv,planform,N,omega_dist,Omega_opt,RA
                     if np.isclose(kDOmega, 0.0):
                         raise ValueError("Cannot optimize washout: kDOmega is zero.")
                     Omega_opt = (kDL*CLd)/(2*kDOmega*CLa)
+    # Calculate optimum linear washout amount
+    if washout_type == "linear" and Omega_opt == "optimum":
+        if np.isclose(kDOmega, 0.0):
+            raise ValueError("Cannot optimize linear washout: kDOmega is zero.")
+        Omega_opt = (kDL*CLd)/(2*kDOmega*CLa)
+    # Determine the operating angle of attack
+    match a:
+        case "CL":
+            a = alo + (CL_input/CLa) + (eps_Omega*Omega_opt)
+        case int() | float():
+            pass
+        case _:
+            raise ValueError(f"Unknown angle of attack condition: {a}")
     # Calculate lift and induced drag
     match washout_type:
         case "none":
             omega_dist = np.zeros(N)
             CL  = CLa*(a-alo)
             CDi = CL**2*(1+kD)/(pi*RA)
-        case "linear":
-            if Omega_opt == "optimum":
-                if np.isclose(kDOmega, 0.0):
-                    raise ValueError("Cannot optimize linear washout: kDOmega is zero.")
-                Omega_opt = (kDL*CLd)/(2*kDOmega*CLa)
-            CL  = CLa*((a-alo)-(eps_Omega*Omega_opt))
-            CDi = (CL**2*(1+kD) - kDL*CL*CLa*Omega_opt + kDOmega*(CLa*Omega_opt)**2)/(pi*RA)
-        case "optimum":
+        case "linear" | "optimum":
             CL  = CLa*((a-alo)-(eps_Omega*Omega_opt))
             CDi = (CL**2*(1+kD) - kDL*CL*CLa*Omega_opt + kDOmega*(CLa*Omega_opt)**2)/(pi*RA)
         case _:
             raise ValueError(f"Unknown washout type: {washout_type}")
-    return (an,bn,C,Cinv,cpb,CL,CLa,CDi,dn,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist,Omega_opt)
+    return (a,an,bn,C,Cinv,cpb,CL,CLa,CDi,dn,eps_Omega,es,kL,kD,kDL,kDOmega,omega_dist,Omega_opt)
 
 def rolling(a,al0,an,bn,cn,delta_a,dn,Omega,pbar,RA):
     """ This finds everything related to rolling. """

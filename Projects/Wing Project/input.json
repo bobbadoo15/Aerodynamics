@@ -1,48 +1,48 @@
 {
     "wing" : {
         "planform" : {
-          "type" : "file",
+          "type" : "tapered",
           "type_options" : [["elliptic: (requires aspect_ratio)"],
                             ["tapered: (requires aspect_ratio and taper_ratio)"],
                             ["file: (requires filename)"]],
-          "aspect_ratio" : 20.0,
-          "taper_ratio" : 0.8,
+          "aspect_ratio" : 10,
+          "taper_ratio" : 0.5,
           "filename" : "planform.txt"
         },
         "airfoil_lift_slope" : 6.283185307179590,
-        "nodes_per_semispan" : 100,
+        "nodes_per_semispan" : 50,
         "washout" : {
-          "distribution" : "optimum",
+          "distribution" : "linear",
           "distribution_options" : [["none: no twist"],
                                     ["linear: linear twist distribution"],
                                     ["optimum: optimum twist distribution"]],
-          "amount[deg]" : 5,
+          "amount[deg]" : 2,
           "amount_options" : [["value: real number in degrees"],
                                  ["optimum: requires CL_design"]],
-          "CL_design" : 0.5
+          "CL_design" : 0.45
         },
         "aileron" : {
-            "begin[z/b]" : 0.22,
+            "begin[z/b]" : 0.3,
             "end[z/b]" : 0.45,
-            "begin[cf/c]" : 0.18,
-            "end[cf/c]" : 0.18,
-            "hinge_efficiency" : 0.85
+            "begin[cf/c]" : 0.1,
+            "end[cf/c]" : 0.2,
+            "hinge_efficiency" : 0.75
         }
     },
     "condition" : {
-        "alpha_root[deg]" : 5,
+        "alpha_root[deg]" : 4,
         "alpha_options" : [["value: real number in degrees"],
                            ["CL: requires CL"]],
-        "CL" : 0.8,
-        "aileron_deflection[deg]" : 2.0,
+        "CL" : 0.1,
+        "aileron_deflection[deg]" : -1,
         "pbar" : "steady",
         "pbar_options" : [["value: real number nondimensional rolling rate"],
                           ["steady: computes steady-state rolling rate"]]
     },
     "view" : {
         "planform" : true,
-        "washout_distribution" : false,
-        "aileron_distribution" : false,
+        "washout_distribution" : true,
+        "aileron_distribution" : true,
         "CL_hat_distributions" : false,
         "CL_tilde_distributions" : false
     }
